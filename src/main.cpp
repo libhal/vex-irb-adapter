@@ -33,19 +33,21 @@ int main()
   // Initialize the platform and set as many resources as available for this the
   // supported platforms.
   initialize_platform(hardware_map);
+  hal::print<32>(*hardware_map.console.value(), "Starting application...");
+  application();
 
-  try {
-    application();
-  } catch (std::bad_optional_access const& e) {
-    if (hardware_map.console) {
-      hal::print(*hardware_map.console.value(),
-                 "A resource required by the application was not available!\n"
-                 "Calling terminate!\n");
-    }
-  }  // Allow any other exceptions to terminate the application
+  // try {
+  //   application();
+  // } catch (std::bad_optional_access const& e) {
+  //   if (hardware_map.console) {
+  //     hal::print(*hardware_map.console.value(),
+  //                "A resource required by the application was not
+  //                available!\n" "Calling terminate!\n");
+  //   }
+  // }  // Allow any other exceptions to terminate the application
 
-  // Terminate if the code reaches this point.
-  std::terminate();
+  // // Terminate if the code reaches this point.
+  // std::terminate();
 }
 
 void application()
@@ -56,13 +58,13 @@ void application()
   auto& console = *hardware_map.console.value();
   auto& counter_reset = *hardware_map.counter_reset.value();
   auto& counter_clock = *hardware_map.counter_clock.value();
-  [[maybe_unused]] auto& frequency_select =
-    *hardware_map.frequency_select.value();
-  [[maybe_unused]] auto& transceiver_direction =
-    *hardware_map.transceiver_direction.value();
-  auto& intensity = *hardware_map.intensity.value();
-  [[maybe_unused]] auto& rs485_transceiver =
-    *hardware_map.rs485_transceiver.value();
+  [[maybe_unused]] auto& intensity = *hardware_map.intensity.value();
+  // [[maybe_unused]] auto& frequency_select =
+  //   *hardware_map.frequency_select.value();
+  // [[maybe_unused]] auto& transceiver_direction =
+  //   *hardware_map.transceiver_direction.value();
+  // [[maybe_unused]] auto& rs485_transceiver =
+  //   *hardware_map.rs485_transceiver.value();
 
   while (true) {
     size_t led_count = 0;
@@ -71,15 +73,17 @@ void application()
     counter_reset.level(false);
     counter_clock.level(false);
     hal::delay(clock, 3ms);
-    hal::print<32>(console, "%X : %X", led_count, intensity.read());
-    hal::delay(clock, 2s);
+    hal::print<32>(console, "\nLED %u:", led_count);
+    hal::print<32>(console, "%f", intensity.read());
+    hal::delay(clock, 500ms);
     while (led_count < 8) {
       counter_clock.level(true);
       led_count++;
       counter_clock.level(false);
       hal::delay(clock, 3ms);
-      hal::print<32>(console, "%X : %X", led_count, intensity.read());
-      hal::delay(clock, 2s);
+      hal::print<32>(console, "\nLED %u:", led_count);
+      hal::print<32>(console, "%f", intensity.read());
+      hal::delay(clock, 500ms);
     }
   }
 }
