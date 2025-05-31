@@ -16,6 +16,7 @@
 
 #include <optional>
 
+#include <libhal/adc.hpp>
 #include <libhal/functional.hpp>
 #include <libhal/output_pin.hpp>
 #include <libhal/serial.hpp>
@@ -29,12 +30,14 @@ struct resource_list
       continue;
     }
   };
-  // Both status_led and clock are required in order to generate the terminate
-  // blink pattern.
-  std::optional<hal::output_pin*> status_led;
-  std::optional<hal::steady_clock*> clock;
-  // Initialize 3rd to support logging error messages
   std::optional<hal::serial*> console;
+  std::optional<hal::steady_clock*> clock;
+  std::optional<hal::output_pin*> counter_reset;
+  std::optional<hal::output_pin*> counter_clock;
+  std::optional<hal::adc*> intensity;
+  [[maybe_unused]] std::optional<hal::output_pin*> frequency_select;
+  [[maybe_unused]] std::optional<hal::output_pin*> transceiver_direction;
+  [[maybe_unused]] std::optional<hal::serial*> rs485_transceiver;
 };
 
 /**
