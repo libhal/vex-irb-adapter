@@ -45,6 +45,13 @@ void initialize_platform(resource_list& p_list)
 
   p_list.console = &console;
 
+  static hal::stm32f1::uart uart3(hal::port<3>,
+                                  hal::buffer<128>,
+                                  hal::serial::settings{
+                                    .baud_rate = 115200,
+                                  });
+  p_list.rs485_transceiver = &uart3;
+
   static hal::stm32f1::output_pin pb14('B', 14);
   static hal::stm32f1::output_pin pb13('B', 13);
   static hal::stm32f1::output_pin pb12('B', 12);

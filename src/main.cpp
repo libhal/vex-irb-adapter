@@ -35,19 +35,6 @@ int main()
   initialize_platform(hardware_map);
   hal::print<32>(*hardware_map.console.value(), "Starting application...");
   application();
-
-  // try {
-  //   application();
-  // } catch (std::bad_optional_access const& e) {
-  //   if (hardware_map.console) {
-  //     hal::print(*hardware_map.console.value(),
-  //                "A resource required by the application was not
-  //                available!\n" "Calling terminate!\n");
-  //   }
-  // }  // Allow any other exceptions to terminate the application
-
-  // // Terminate if the code reaches this point.
-  // std::terminate();
 }
 
 void application()
@@ -59,12 +46,12 @@ void application()
   auto& counter_reset = *hardware_map.counter_reset.value();
   auto& counter_clock = *hardware_map.counter_clock.value();
   [[maybe_unused]] auto& intensity = *hardware_map.intensity.value();
-  // [[maybe_unused]] auto& frequency_select =
-  //   *hardware_map.frequency_select.value();
-  // [[maybe_unused]] auto& transceiver_direction =
-  //   *hardware_map.transceiver_direction.value();
-  // [[maybe_unused]] auto& rs485_transceiver =
-  //   *hardware_map.rs485_transceiver.value();
+  [[maybe_unused]] auto& frequency_select =
+    *hardware_map.frequency_select.value();
+  [[maybe_unused]] auto& transceiver_direction =
+    *hardware_map.transceiver_direction.value();
+  [[maybe_unused]] auto& rs485_transceiver =
+    *hardware_map.rs485_transceiver.value();
 
   while (true) {
     size_t led_count = 0;
