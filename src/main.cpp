@@ -24,6 +24,8 @@
 resource_list hardware_map{};
 
 void application();
+std::array<float, 8> get_read_values();
+void print_all(std::array<float, 8> read_values);
 
 int main()
 {
@@ -40,37 +42,61 @@ int main()
 void application()
 {
   using namespace std::chrono_literals;
-
-  auto& clock = *hardware_map.clock.value();
-  auto& console = *hardware_map.console.value();
-  auto& counter_reset = *hardware_map.counter_reset.value();
-  auto& counter_clock = *hardware_map.counter_clock.value();
-  [[maybe_unused]] auto& intensity = *hardware_map.intensity.value();
+  // auto& console = *hardware_map.console.value();
+  auto& transceiver_direction = *hardware_map.transceiver_direction.value();
   [[maybe_unused]] auto& frequency_select =
     *hardware_map.frequency_select.value();
-  [[maybe_unused]] auto& transceiver_direction =
-    *hardware_map.transceiver_direction.value();
   [[maybe_unused]] auto& rs485_transceiver =
     *hardware_map.rs485_transceiver.value();
 
   while (true) {
-    size_t led_count = 0;
+    // transceiver_direction low sets transceiver to receive mode
+    transceiver_direction.level(false);
+    // wait for request
+    // static auto request = hal::read<1>(console, hal::never_timeout());
+    // hal::print<32>(console, "%X\n", request);
+    // get read values
+    static std::array<float, 8> read_values = get_read_values();
+    // return data based on request
+
+    print_all(read_values);
+    hal::delay(*hardware_map.clock.value(), 1s);
+  }
+}
+
+std::array<float, 8> get_read_values()
+{
+  using namespace std::chrono_literals;
+
+  auto& clock = *hardware_map.clock.value();
+  auto& counter_reset = *hardware_map.counter_reset.value();
+  auto& counter_clock = *hardware_map.counter_clock.value();
+  auto& intensity = *hardware_map.intensity.value();
+  static std::array<float, 8> read_values;
+
+  size_t led_count = 0;
+  counter_clock.level(true);
+  counter_reset.level(true);
+  counter_reset.level(false);
+  counter_clock.level(false);
+  hal::delay(clock, 3ms);
+  read_values[led_count] = intensity.read();
+  while (led_count < 8) {
+    hal::delay(clock, 2ms);
     counter_clock.level(true);
-    counter_reset.level(true);
-    counter_reset.level(false);
+    led_count++;
     counter_clock.level(false);
     hal::delay(clock, 3ms);
-    hal::print<32>(console, "\nLED %u:", led_count);
-    hal::print<32>(console, "%f", intensity.read());
-    hal::delay(clock, 500ms);
-    while (led_count < 8) {
-      counter_clock.level(true);
-      led_count++;
-      counter_clock.level(false);
-      hal::delay(clock, 3ms);
-      hal::print<32>(console, "\nLED %u:", led_count);
-      hal::print<32>(console, "%f", intensity.read());
-      hal::delay(clock, 500ms);
-    }
+    read_values[led_count] = intensity.read();
+  }
+  return read_values;
+}
+
+void print_all(std::array<float, 8> read_values)
+{
+  auto& console = *hardware_map.console.value();
+  for (uint8_t i = 0; i < 8; i++) {
+    hal::print<32>(console, "LED %u: ", i);
+    hal::print<32>(console, "%f \n", read_values[i]);
   }
 }
