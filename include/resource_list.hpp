@@ -32,11 +32,12 @@ struct resource_list
   };
   std::optional<hal::serial*> console;
   std::optional<hal::steady_clock*> clock;
+  std::optional<hal::output_pin*> status_led;
   std::optional<hal::output_pin*> counter_reset;
   std::optional<hal::output_pin*> counter_clock;
   std::optional<hal::adc*> intensity;
   std::optional<hal::output_pin*> transceiver_direction;
-  [[maybe_unused]] std::optional<hal::output_pin*> frequency_select;
+  std::optional<hal::output_pin*> frequency_select;
   [[maybe_unused]] std::optional<hal::serial*> rs485_transceiver;
 };
 

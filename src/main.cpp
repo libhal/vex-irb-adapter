@@ -27,6 +27,37 @@
 // provided.
 resource_list hardware_map{};
 
+[[noreturn]] void terminate_handler() noexcept
+{
+  bool valid = hardware_map.status_led && hardware_map.clock;
+
+  if (not valid) {
+    // spin here until debugger is connected
+    while (true) {
+      continue;
+    }
+  }
+
+  // Otherwise, blink the led in a pattern, and wait for the debugger.
+  // In GDB, use the `where` command to see if you have the `terminate_handler`
+  // in your stack trace.
+
+  auto& led = *hardware_map.status_led.value();
+  auto& clock = *hardware_map.clock.value();
+
+  while (true) {
+    using namespace std::chrono_literals;
+    led.level(false);
+    hal::delay(clock, 100ms);
+    led.level(true);
+    hal::delay(clock, 100ms);
+    led.level(false);
+    hal::delay(clock, 100ms);
+    led.level(true);
+    hal::delay(clock, 1000ms);
+  }
+}
+
 void application();
 std::array<float, 8> read_led_values();
 void print_all();
@@ -37,11 +68,26 @@ int main()
   using namespace std::literals;
   using namespace hal::literals;
 
+  // Setup the terminate handler before we call anything that can throw
+  hal::set_terminate(terminate_handler);
+
   // Initialize the platform and set as many resources as available for this the
   // supported platforms.
   initialize_platform(hardware_map);
+
   hal::print<32>(*hardware_map.console.value(), "Starting application...");
-  application();
+  try {
+    application();
+  } catch (std::bad_optional_access const& e) {
+    if (hardware_map.console) {
+      hal::print(*hardware_map.console.value(),
+                 "A resource required by the application was not available!\n"
+                 "Calling terminate!\n");
+    }
+  }  // Allow any other exceptions to terminate the application
+
+  // Terminate if the code reaches this point.
+  std::terminate();
 }
 
 void application()
