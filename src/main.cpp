@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <libhal-exceptions/control.hpp>
 #include <libhal-util/serial.hpp>
 #include <libhal-util/steady_clock.hpp>
 #include <libhal/error.hpp>
 
+#include <libhal/units.hpp>
 #include <resource_list.hpp>
 
 // This is only global so that the terminate handler can use the resources
@@ -24,8 +28,9 @@
 resource_list hardware_map{};
 
 void application();
-std::array<float, 8> get_read_values();
+std::array<float, 8> read_led_values();
 void print_all(std::array<float, 8> read_values);
+void strongest_signal(std::array<float, 8> read_values);
 
 int main()
 {
@@ -42,7 +47,7 @@ int main()
 void application()
 {
   using namespace std::chrono_literals;
-  // auto& console = *hardware_map.console.value();
+  auto& console = *hardware_map.console.value();
   auto& transceiver_direction = *hardware_map.transceiver_direction.value();
   [[maybe_unused]] auto& frequency_select =
     *hardware_map.frequency_select.value();
@@ -53,50 +58,70 @@ void application()
     // transceiver_direction low sets transceiver to receive mode
     transceiver_direction.level(false);
     // wait for request
-    // static auto request = hal::read<1>(console, hal::never_timeout());
-    // hal::print<32>(console, "%X\n", request);
+    std::array<hal::byte, 2> request{};
+    request = hal::read<2>(console, hal::never_timeout());
+    hal::print<32>(console, "%X\n", request[0]);
+    auto request_byte = request[0];
+    // transceiver_direction high sets transceiver to send mode
+    transceiver_direction.level(true);
     // get read values
-    static std::array<float, 8> read_values = get_read_values();
+    auto read_values = read_led_values();
     // return data based on request
-
-    print_all(read_values);
-    hal::delay(*hardware_map.clock.value(), 1s);
+    switch (request_byte) {
+      case 0x61:
+        print_all(read_values);
+        break;
+      case 0x62:
+        strongest_signal(read_values);
+        break;
+      default:
+        hal::print<32>(console, "Default action...\n");
+    }
   }
 }
 
-std::array<float, 8> get_read_values()
+std::array<float, 8> read_led_values()
 {
   using namespace std::chrono_literals;
-
+  std::array<float, 8> read_values;
   auto& clock = *hardware_map.clock.value();
   auto& counter_reset = *hardware_map.counter_reset.value();
   auto& counter_clock = *hardware_map.counter_clock.value();
   auto& intensity = *hardware_map.intensity.value();
-  static std::array<float, 8> read_values;
-
   size_t led_count = 0;
   counter_clock.level(true);
   counter_reset.level(true);
   counter_reset.level(false);
+  hal::delay(clock, 5ms);
   counter_clock.level(false);
   hal::delay(clock, 3ms);
   read_values[led_count] = intensity.read();
-  while (led_count < 8) {
+  while (led_count < 7) {
     hal::delay(clock, 2ms);
     counter_clock.level(true);
     led_count++;
+    hal::delay(clock, 5ms);
     counter_clock.level(false);
     hal::delay(clock, 3ms);
     read_values[led_count] = intensity.read();
   }
   return read_values;
 }
-
 void print_all(std::array<float, 8> read_values)
 {
   auto& console = *hardware_map.console.value();
-  for (uint8_t i = 0; i < 8; i++) {
+  for (size_t i = 0; i < 8; i++) {
     hal::print<32>(console, "LED %u: ", i);
-    hal::print<32>(console, "%f \n", read_values[i]);
+    hal::print<32>(console, "%f\n", read_values[i]);
   }
+}
+
+void strongest_signal(std::array<float, 8> read_values)
+{
+  auto& console = *hardware_map.console.value();
+
+  auto max = std::max_element(read_values.begin(), read_values.end());
+  auto position = std::distance(read_values.begin(), max);
+  hal::print<32>(console, "MAX VALUE LED %u: ", position);
+  hal::print<32>(console, "%f\n", *max);
 }
