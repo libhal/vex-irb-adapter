@@ -29,8 +29,8 @@ resource_list hardware_map{};
 
 void application();
 std::array<float, 8> read_led_values();
-void print_all(std::array<float, 8> read_values);
-void strongest_signal(std::array<float, 8> read_values);
+void print_all();
+void strongest_signal();
 
 int main()
 {
@@ -55,24 +55,31 @@ void application()
     *hardware_map.rs485_transceiver.value();
 
   while (true) {
-    // transceiver_direction low sets transceiver to receive mode
+    // set transceiver to receive mode
     transceiver_direction.level(false);
+
     // wait for request
     std::array<hal::byte, 2> request{};
     request = hal::read<2>(console, hal::never_timeout());
-    hal::print<32>(console, "%X\n", request[0]);
     auto request_byte = request[0];
-    // transceiver_direction high sets transceiver to send mode
+
+    // set transceiver to send mode
     transceiver_direction.level(true);
-    // get read values
-    auto read_values = read_led_values();
     // return data based on request
     switch (request_byte) {
       case 0x61:
-        print_all(read_values);
+        print_all();
         break;
       case 0x62:
-        strongest_signal(read_values);
+        strongest_signal();
+        break;
+      case 0x63:  // set frequency high
+        frequency_select.level(true);
+        hal::print<32>(console, "Set frequency to 10kHz\n");
+        break;
+      case 0x64:  // set frequency low
+        frequency_select.level(false);
+        hal::print<32>(console, "Set frequency to 1kHz\n");
         break;
       default:
         hal::print<32>(console, "Default action...\n");
@@ -107,19 +114,21 @@ std::array<float, 8> read_led_values()
   }
   return read_values;
 }
-void print_all(std::array<float, 8> read_values)
+
+void print_all()
 {
   auto& console = *hardware_map.console.value();
+  auto read_values = read_led_values();
   for (size_t i = 0; i < 8; i++) {
     hal::print<32>(console, "LED %u: ", i);
     hal::print<32>(console, "%f\n", read_values[i]);
   }
 }
 
-void strongest_signal(std::array<float, 8> read_values)
+void strongest_signal()
 {
   auto& console = *hardware_map.console.value();
-
+  auto read_values = read_led_values();
   auto max = std::max_element(read_values.begin(), read_values.end());
   auto position = std::distance(read_values.begin(), max);
   hal::print<32>(console, "MAX VALUE LED %u: ", position);
