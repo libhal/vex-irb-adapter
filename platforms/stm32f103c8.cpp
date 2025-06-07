@@ -51,12 +51,10 @@ void initialize_platform(resource_list& p_list)
   static hal::stm32f1::output_pin pb13('B', 13);
   static hal::stm32f1::output_pin pb12('B', 12);
   static hal::stm32f1::output_pin pa0('A', 0);
-  static hal::stm32f1::output_pin led('C', 13);
   static hal::atomic_spin_lock adc_lock;
   static hal::stm32f1::adc<hal::stm32f1::peripheral::adc1> adc(adc_lock);
   static auto a0 = adc.acquire_channel(hal::stm32f1::adc_pins::pb0);
 
-  p_list.status_led = &led;
   p_list.counter_reset = &pb14;
   p_list.counter_clock = &pb13;
   p_list.frequency_select = &pb12;

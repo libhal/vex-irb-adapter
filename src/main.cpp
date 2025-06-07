@@ -29,7 +29,7 @@ resource_list hardware_map{};
 
 [[noreturn]] void terminate_handler() noexcept
 {
-  bool valid = hardware_map.status_led && hardware_map.clock;
+  bool valid = hardware_map.frequency_select && hardware_map.clock;
 
   if (not valid) {
     // spin here until debugger is connected
@@ -42,19 +42,23 @@ resource_list hardware_map{};
   // In GDB, use the `where` command to see if you have the `terminate_handler`
   // in your stack trace.
 
-  auto& led = *hardware_map.status_led.value();
   auto& clock = *hardware_map.clock.value();
+  auto& frequency_select = *hardware_map.frequency_select.value();
 
   while (true) {
     using namespace std::chrono_literals;
-    led.level(false);
+    frequency_select.level(false);
     hal::delay(clock, 100ms);
-    led.level(true);
+    frequency_select.level(true);
     hal::delay(clock, 100ms);
-    led.level(false);
+    frequency_select.level(false);
     hal::delay(clock, 100ms);
-    led.level(true);
-    hal::delay(clock, 1000ms);
+    frequency_select.level(true);
+    hal::delay(clock, 100ms);
+    frequency_select.level(false);
+    hal::delay(clock, 100ms);
+    frequency_select.level(true);
+    hal::delay(clock, 2s);
   }
 }
 
@@ -95,8 +99,7 @@ void application()
   using namespace std::chrono_literals;
   auto& console = *hardware_map.console.value();
   auto& transceiver_direction = *hardware_map.transceiver_direction.value();
-  [[maybe_unused]] auto& frequency_select =
-    *hardware_map.frequency_select.value();
+  auto& frequency_select = *hardware_map.frequency_select.value();
   [[maybe_unused]] auto& rs485_transceiver =
     *hardware_map.rs485_transceiver.value();
 
