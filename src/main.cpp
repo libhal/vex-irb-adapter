@@ -15,7 +15,9 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <libhal-exceptions/control.hpp>
+#include <libhal-util/map.hpp>
 #include <libhal-util/serial.hpp>
 #include <libhal-util/steady_clock.hpp>
 #include <libhal/error.hpp>
@@ -64,8 +66,8 @@ resource_list hardware_map{};
 
 void application();
 std::array<float, 8> read_led_values();
-void print_all();
-void strongest_signal();
+void print_all(bool high_frequency);
+void strongest_signal(bool high_frequency);
 
 int main()
 {
@@ -100,16 +102,16 @@ void application()
   auto& console = *hardware_map.console.value();
   auto& transceiver_direction = *hardware_map.transceiver_direction.value();
   auto& frequency_select = *hardware_map.frequency_select.value();
-  [[maybe_unused]] auto& rs485_transceiver =
-    *hardware_map.rs485_transceiver.value();
+  auto& rs485_transceiver = *hardware_map.rs485_transceiver.value();
+
+  bool high_frequency = false;
 
   while (true) {
     // set transceiver to receive mode
     transceiver_direction.level(false);
 
     // wait for request
-    std::array<hal::byte, 2> request{};
-    request = hal::read<2>(console, hal::never_timeout());
+    auto request = hal::read<1>(rs485_transceiver, hal::never_timeout());
     auto request_byte = request[0];
 
     // set transceiver to send mode
@@ -117,18 +119,20 @@ void application()
     // return data based on request
     switch (request_byte) {
       case 0x61:
-        print_all();
+        print_all(high_frequency);
         break;
       case 0x62:
-        strongest_signal();
+        strongest_signal(high_frequency);
         break;
       case 0x63:  // set frequency high
         frequency_select.level(true);
         hal::print<32>(console, "Set frequency to 10kHz\n");
+        high_frequency = true;
         break;
-      case 0x64:  // set frequency low
+      case 0x64:  // set frequency low (LED on)
         frequency_select.level(false);
         hal::print<32>(console, "Set frequency to 1kHz\n");
+        high_frequency = false;
         break;
       default:
         hal::print<32>(console, "Default action...\n");
@@ -142,44 +146,74 @@ std::array<float, 8> read_led_values()
   std::array<float, 8> read_values;
   auto& clock = *hardware_map.clock.value();
   auto& counter_reset = *hardware_map.counter_reset.value();
-  auto& counter_clock = *hardware_map.counter_clock.value();
+  auto& accumulator_reset = *hardware_map.accumulator_reset.value();
   auto& intensity = *hardware_map.intensity.value();
   size_t led_count = 0;
-  counter_clock.level(true);
+
+  accumulator_reset.level(true);
   counter_reset.level(true);
   counter_reset.level(false);
   hal::delay(clock, 5ms);
-  counter_clock.level(false);
+  accumulator_reset.level(false);
   hal::delay(clock, 3ms);
   read_values[led_count] = intensity.read();
+
   while (led_count < 7) {
     hal::delay(clock, 2ms);
-    counter_clock.level(true);
+    accumulator_reset.level(true);
     led_count++;
     hal::delay(clock, 5ms);
-    counter_clock.level(false);
+    accumulator_reset.level(false);
     hal::delay(clock, 3ms);
     read_values[led_count] = intensity.read();
   }
   return read_values;
 }
 
-void print_all()
+void print_all(bool high_frequency)
 {
   auto& console = *hardware_map.console.value();
+  auto& rs485_transceiver = *hardware_map.rs485_transceiver.value();
   auto read_values = read_led_values();
+  hal::byte start_byte = 0xAA;
+  hal::byte checksum = start_byte;
+  std::array<hal::byte, 10> send_bytes;
+  send_bytes[0] = start_byte;
+
   for (size_t i = 0; i < 8; i++) {
+    auto scaled_float = hal::map(read_values[i], { 0.0, 1.0 }, { 0.0, 128.0 });
+    auto scaled_int = static_cast<uint8_t>(scaled_float);
+    // send 1 bit for freq + 7 bits of data to transceiver for each PD
+    hal::byte send_byte = (high_frequency << 7) | scaled_int;
+    send_bytes[i + 1] = send_byte;
+    checksum += send_byte;
+
     hal::print<32>(console, "LED %u: ", i);
-    hal::print<32>(console, "%f\n", read_values[i]);
+    hal::print<32>(console, "%f    ", read_values[i]);
+    hal::print<32>(console, "%X\n", send_byte);
   }
+  hal::print<32>(console, "Checksum: %X\n", checksum);
+  send_bytes[9] = checksum;
+  hal::print(rs485_transceiver, send_bytes);
 }
 
-void strongest_signal()
+void strongest_signal(bool high_frequency)
 {
   auto& console = *hardware_map.console.value();
+  auto& rs485_transceiver = *hardware_map.rs485_transceiver.value();
   auto read_values = read_led_values();
+
   auto max = std::max_element(read_values.begin(), read_values.end());
   auto position = std::distance(read_values.begin(), max);
+  auto scaled_float = hal::map(*max, { 0.0, 1.0 }, { 0.0, 128.0 });
+  auto scaled_int = static_cast<uint8_t>(scaled_float);
+
+  // id_byte is 1 bit for freq + 4 empty bits + 3 bits for PD num
+  hal::byte id_byte = (high_frequency << 7) | position;
+  hal::byte checksum = id_byte + scaled_int;
+  std::array<hal::byte, 3> send_bytes{ id_byte, scaled_int, checksum };
+
   hal::print<32>(console, "MAX VALUE LED %u: ", position);
   hal::print<32>(console, "%f\n", *max);
+  hal::print(rs485_transceiver, send_bytes);
 }

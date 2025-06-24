@@ -33,7 +33,7 @@ struct resource_list
   std::optional<hal::serial*> console;
   std::optional<hal::steady_clock*> clock;
   std::optional<hal::output_pin*> counter_reset;
-  std::optional<hal::output_pin*> counter_clock;
+  std::optional<hal::output_pin*> accumulator_reset;
   std::optional<hal::adc*> intensity;
   std::optional<hal::output_pin*> transceiver_direction;
   std::optional<hal::output_pin*> frequency_select;

@@ -56,7 +56,7 @@ void initialize_platform(resource_list& p_list)
   static auto a0 = adc.acquire_channel(hal::stm32f1::adc_pins::pb0);
 
   p_list.counter_reset = &pb14;
-  p_list.counter_clock = &pb13;
+  p_list.accumulator_reset = &pb13;
   p_list.frequency_select = &pb12;
   p_list.transceiver_direction = &pa0;
   p_list.intensity = &a0;
