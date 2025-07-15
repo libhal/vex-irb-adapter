@@ -16,35 +16,74 @@
 
 #include <optional>
 
+#include <libhal-arm-mcu/system_control.hpp>
 #include <libhal/adc.hpp>
 #include <libhal/functional.hpp>
+#include <libhal/i2c.hpp>
 #include <libhal/output_pin.hpp>
 #include <libhal/serial.hpp>
 #include <libhal/steady_clock.hpp>
 
-struct resource_list
-{
-  /// Initialized 1st
-  hal::callback<void()> reset = +[] {
-    while (true) {
-      continue;
-    }
-  };
-  std::optional<hal::serial*> console;
-  std::optional<hal::steady_clock*> clock;
-  std::optional<hal::output_pin*> counter_reset;
-  std::optional<hal::output_pin*> accumulator_reset;
-  std::optional<hal::adc*> intensity;
-  std::optional<hal::output_pin*> transceiver_direction;
-  std::optional<hal::output_pin*> frequency_select;
-  [[maybe_unused]] std::optional<hal::serial*> rs485_transceiver;
-};
-
+namespace custom {
 /**
- * @brief Initializes the target platform and the resource list
+ * @brief A stand in interface until libhal supports an official watchdog
+ * interface.
  *
- * @param p_list - the list of resources to initialize for the application to
- * run properly. The initialize platform library should initialize each resource
- * in the resoure list.
  */
-void initialize_platform(resource_list& p_list);
+class watchdog
+{
+public:
+  watchdog() = default;
+  virtual void start() = 0;
+  virtual void reset() = 0;
+  virtual void set_countdown_time(hal::time_duration p_wait_time) = 0;
+  virtual bool check_flag() = 0;
+  virtual void clear_flag() = 0;
+  virtual ~watchdog() = default;
+};
+}  // namespace custom
+
+namespace resources {
+// =======================================================
+// Defined by each platform file
+// =======================================================
+/**
+ * @brief Allocator for driver memory
+ *
+ * The expectation is that the implementation of this allocator is a
+ * std::pmr::monotonic_buffer_resource with static memory storage, meaning the
+ * memory is fixed in size and memory cannot be deallocated. This is fine for
+ * the demos.
+ *
+ * @return std::pmr::polymorphic_allocator<>
+ */
+std::pmr::polymorphic_allocator<> driver_allocator();
+/**
+ * @brief Steady clock that provides the current uptime
+ *
+ * @return hal::v5::strong_ptr<hal::steady_clock>
+ */
+hal::v5::strong_ptr<hal::steady_clock> clock();
+hal::v5::strong_ptr<hal::serial> console();
+hal::v5::strong_ptr<hal::serial> rs485_transceiver();
+hal::v5::strong_ptr<hal::adc> intensity();
+hal::v5::strong_ptr<hal::i2c> i2c();
+hal::v5::strong_ptr<hal::output_pin> counter_reset();
+hal::v5::strong_ptr<hal::output_pin> accumulator_reset();
+hal::v5::strong_ptr<hal::output_pin> transceiver_direction();
+hal::v5::strong_ptr<hal::output_pin> frequency_select();
+
+inline void reset()
+{
+  hal::cortex_m::reset();
+}
+inline void sleep(hal::time_duration p_duration)
+{
+  auto delay_clock = resources::clock();
+  hal::delay(*delay_clock, p_duration);
+}
+}  // namespace resources
+
+// Application function is implemented by one of the .cpp files.
+void initialize_platform();
+void application();
