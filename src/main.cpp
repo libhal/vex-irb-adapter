@@ -40,15 +40,8 @@ int main()
   auto console = resources::console();
 
   hal::print<32>(*console, "Starting application...");
-  application();
-  // try {
-  //   application();
-  // } catch (std::bad_optional_access const& e) {
-  //   hal::print(*console,
-  //              "A resource required by the application was not available!\n"
-  //              "Calling terminate!\n");
 
-  // }  // Allow any other exceptions to terminate the application
+  application();
 
   // Terminate if the code reaches this point.
   std::terminate();
@@ -57,6 +50,7 @@ int main()
 void application()
 {
   using namespace std::chrono_literals;
+  auto rs485_transceiver = resources::rs485_transceiver();
   auto transceiver_direction = resources::transceiver_direction();
   auto frequency_select = resources::frequency_select();
   auto clock = resources::clock();
@@ -76,8 +70,16 @@ void application()
     frequency_select->level(high_frequency);
     send_strongest_signal(high_frequency);
     // get camera data
+    bool read_success = false;
     if (camera_connected) {
-      send_camera_data();
+      read_success = send_camera_data();
+    }
+    // send all 0's if not connected or no data to read
+    if (!camera_connected || !read_success) {
+      hal::write(*rs485_transceiver,
+                 std::array<hal::byte, 9>{
+                   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+                 hal::never_timeout());
     }
     hal::delay(*clock, 100ms);
   }
