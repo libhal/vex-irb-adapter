@@ -29,9 +29,9 @@
 
 void application();
 std::array<float, 8> read_led_values();
-void send_strongest_signal(bool high_frequency);
+hal::byte send_strongest_signal(bool high_frequency);
 bool camera_init();
-bool send_camera_data();
+hal::byte send_camera_data();
 
 int main()
 {
@@ -62,20 +62,21 @@ void application()
   bool camera_connected = camera_init();
 
   while (true) {
+    hal::byte checksum = 0x00;
     // get low frequency strongest signal
     frequency_select->level(high_frequency);
-    send_strongest_signal(high_frequency);
+    checksum += send_strongest_signal(high_frequency);
     // get high frequency strongest signal
     high_frequency = !high_frequency;
     frequency_select->level(high_frequency);
-    send_strongest_signal(high_frequency);
+    checksum += send_strongest_signal(high_frequency);
     // get camera data
-    bool read_success = false;
+    hal::byte cam_checksum = 0x00;
     if (camera_connected) {
-      read_success = send_camera_data();
+      cam_checksum += send_camera_data();
     }
     // send all 0's if not connected or no data to read
-    if (!camera_connected || !read_success) {
+    if (!camera_connected || cam_checksum == 0x00) {
       hal::write(*rs485_transceiver,
                  std::array<hal::byte, 9>{
                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
@@ -115,7 +116,7 @@ std::array<float, 8> read_led_values()
   return read_values;
 }
 
-void send_strongest_signal(bool high_frequency)
+hal::byte send_strongest_signal(bool high_frequency)
 {
   using namespace std::chrono_literals;
   auto console = resources::console();
@@ -146,11 +147,7 @@ void send_strongest_signal(bool high_frequency)
              std::array<hal::byte, 1>{ send_byte },
              hal::never_timeout());
   checksum += send_byte;
-
-  hal::print<32>(*console, "Checksum: %X\n", checksum);
-  hal::write(*rs485_transceiver,
-             std::array<hal::byte, 1>{ checksum },
-             hal::never_timeout());
+  return checksum;
 }
 
 bool camera_init()
@@ -203,7 +200,7 @@ bool camera_init()
   return true;
 }
 
-bool send_camera_data()
+hal::byte send_camera_data()
 {
   auto i2c = resources::i2c();
   auto console = resources::console();
@@ -230,20 +227,21 @@ bool send_camera_data()
   // request and read back data
   info_buffer =
     hal::write_then_read<16>(*i2c, camera_address, request_blocks_bytes);
-  // check command and ideally checksum
+  // check command only (everything else is sorta useless)
   if (info_buffer[4] != 0x29) {
     hal::print(*console, "Failed reading response.\n");
-    return false;
+    return 0x00;
   }
+  // get block data from read again
   block_data_buffer = hal::read<16>(*i2c, camera_address);
   // check checksum then send data
   hal::byte received_check_sum = 0;
   for (auto& byte : block_data_buffer)
     received_check_sum += byte;
 
-  if (received_check_sum != block_data_buffer[15]) {
+  if (received_check_sum != block_data_buffer.back()) {
     // check sum mismatch
-    return false;
+    return 0x00;
   }
   // only send bytes 5 - 12
   hal::byte checksum = 0x00;
@@ -253,15 +251,10 @@ bool send_camera_data()
                hal::never_timeout());
     checksum += block_data_buffer[i];
   }
-
-  hal::write(*rs485_transceiver,
-             std::array<hal::byte, 1>{ checksum },
-             hal::never_timeout());
-
   // process data
   uint16_t x = (block_data_buffer[6] << 4) | block_data_buffer[5];
   uint16_t y = (block_data_buffer[8] << 4) | block_data_buffer[7];
 
   hal::print<20>(*console, "X: %u   Y: %u \n", x, y);
-  return true;
+  return checksum;
 }
