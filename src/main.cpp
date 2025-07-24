@@ -23,6 +23,10 @@
 #include <libhal-util/steady_clock.hpp>
 #include <libhal/error.hpp>
 
+#include <libhal/i2c.hpp>
+#include <libhal/output_pin.hpp>
+#include <libhal/pointers.hpp>
+#include <libhal/steady_clock.hpp>
 #include <libhal/timeout.hpp>
 #include <libhal/units.hpp>
 #include <resource_list.hpp>
@@ -33,16 +37,41 @@ hal::byte send_strongest_signal(bool high_frequency);
 bool camera_init();
 hal::byte send_camera_data();
 
+hal::v5::optional_ptr<hal::serial> console;
+hal::v5::optional_ptr<hal::serial> rs485_transceiver;
+hal::v5::optional_ptr<hal::steady_clock> device_clock;
+hal::v5::optional_ptr<hal::output_pin> transceiver_direction;
+hal::v5::optional_ptr<hal::output_pin> frequency_select;
+hal::v5::optional_ptr<hal::output_pin> counter_reset;
+hal::v5::optional_ptr<hal::output_pin> accumulator_reset;
+hal::v5::optional_ptr<hal::adc> intensity;
+hal::v5::optional_ptr<hal::i2c> i2c;
+
 int main()
 {
   using namespace std::literals;
   using namespace hal::literals;
-  auto console = resources::console();
+  console = resources::console();
+  rs485_transceiver = resources::rs485_transceiver();
+  device_clock = resources::clock();
+  transceiver_direction = resources::transceiver_direction();
+  frequency_select = resources::frequency_select();
+  counter_reset = resources::counter_reset();
+  accumulator_reset = resources::accumulator_reset();
+  intensity = resources::intensity();
+  i2c = resources::i2c();
 
   hal::print<32>(*console, "Starting application...");
-
-  application();
-
+  while (true) {
+    try {
+      application();
+    } catch (std::bad_optional_access const& e) {
+      hal::print<32>(
+        *console,
+        "A resource required by the application was not available!\n"
+        "Calling terminate!\n");
+    }  // Allow any other exceptions to terminate the application
+  }
   // Terminate if the code reaches this point.
   std::terminate();
 }
@@ -50,16 +79,9 @@ int main()
 void application()
 {
   using namespace std::chrono_literals;
-  auto rs485_transceiver = resources::rs485_transceiver();
-  auto transceiver_direction = resources::transceiver_direction();
-  auto frequency_select = resources::frequency_select();
-  auto clock = resources::clock();
+
   transceiver_direction->level(true);
   bool high_frequency = false;
-
-  // wait a bit and then check for camera
-  hal::delay(*clock, 1s);
-  bool camera_connected = camera_init();
 
   while (true) {
     hal::byte checksum = 0x00;
@@ -72,45 +94,48 @@ void application()
     checksum += send_strongest_signal(high_frequency);
     // get camera data
     hal::byte cam_checksum = 0x00;
+    bool camera_connected = camera_init();
     if (camera_connected) {
       cam_checksum += send_camera_data();
     }
+
     // send all 0's if not connected or no data to read
     if (!camera_connected || cam_checksum == 0x00) {
       hal::write(*rs485_transceiver,
                  std::array<hal::byte, 9>{
                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
                  hal::never_timeout());
+    } else {
+      hal::write(*rs485_transceiver,
+                 std::array<hal::byte, 1>{ checksum },
+                 hal::never_timeout());
     }
-    hal::delay(*clock, 100ms);
+    hal::delay(*device_clock, 100ms);
   }
 }
 
 std::array<float, 8> read_led_values()
 {
   using namespace std::chrono_literals;
-  auto clock = resources::clock();
   std::array<float, 8> read_values;
-  auto counter_reset = resources::counter_reset();
-  auto accumulator_reset = resources::accumulator_reset();
-  auto intensity = resources::intensity();
+
   size_t led_count = 0;
 
   accumulator_reset->level(true);
   counter_reset->level(true);
   counter_reset->level(false);
-  hal::delay(*clock, 5ms);
+  hal::delay(*device_clock, 5ms);
   accumulator_reset->level(false);
-  hal::delay(*clock, 3ms);
+  hal::delay(*device_clock, 3ms);
   read_values[led_count] = intensity->read();
 
   while (led_count < 7) {
-    hal::delay(*clock, 2ms);
+    hal::delay(*device_clock, 2ms);
     accumulator_reset->level(true);
     led_count++;
-    hal::delay(*clock, 5ms);
+    hal::delay(*device_clock, 5ms);
     accumulator_reset->level(false);
-    hal::delay(*clock, 3ms);
+    hal::delay(*device_clock, 3ms);
     read_values[led_count] = intensity->read();
   }
   return read_values;
@@ -119,8 +144,6 @@ std::array<float, 8> read_led_values()
 hal::byte send_strongest_signal(bool high_frequency)
 {
   using namespace std::chrono_literals;
-  auto console = resources::console();
-  auto rs485_transceiver = resources::rs485_transceiver();
   auto read_values = read_led_values();
 
   auto strongest_value =
@@ -152,8 +175,6 @@ hal::byte send_strongest_signal(bool high_frequency)
 
 bool camera_init()
 {
-  auto i2c = resources::i2c();
-  auto console = resources::console();
   constexpr hal::byte camera_address = 0x32;
   constexpr hal::byte protocol_address = 0x11;
   constexpr hal::byte header1 = 0x55;
@@ -202,10 +223,6 @@ bool camera_init()
 
 hal::byte send_camera_data()
 {
-  auto i2c = resources::i2c();
-  auto console = resources::console();
-  auto rs485_transceiver = resources::rs485_transceiver();
-
   constexpr hal::byte camera_address = 0x32;
   constexpr hal::byte protocol_address = 0x11;
   constexpr hal::byte header1 = 0x55;
