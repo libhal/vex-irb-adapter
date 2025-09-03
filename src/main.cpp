@@ -59,21 +59,20 @@ int main()
   counter_reset = resources::counter_reset();
   accumulator_reset = resources::accumulator_reset();
   intensity = resources::intensity();
-  i2c = resources::i2c();
 
   hal::print<32>(*console, "Starting application...");
-  while (true) {
-    try {
-      application();
-    } catch (std::bad_optional_access const& e) {
-      hal::print<32>(
-        *console,
-        "A resource required by the application was not available!\n"
-        "Calling terminate!\n");
-    }  // Allow any other exceptions to terminate the application
-  }
-  // Terminate if the code reaches this point.
-  std::terminate();
+  application();
+  // while (true) {
+  //   try {
+  //   } catch (std::bad_optional_access const& e) {
+  //     hal::print<32>(
+  //       *console,
+  //       "A resource required by the application was not available!\n"
+  //       "Calling terminate!\n");
+  //   }  // Allow any other exceptions to terminate the application
+  // }
+  // // Terminate if the code reaches this point.
+  // std::terminate();
 }
 
 void application()
@@ -82,7 +81,13 @@ void application()
 
   transceiver_direction->level(true);
   bool high_frequency = false;
-  bool camera_connected = camera_init();
+  bool camera_connected = false;
+  try {
+    i2c = resources::i2c();
+    camera_connected = camera_init();
+  } catch (...) {
+    hal::print<32>(*console, "Camera not connected...\n");
+  }
 
   while (true) {
     std::array<hal::byte, 13> return_bytes;
@@ -100,7 +105,11 @@ void application()
     // get camera data
     std::array<hal::byte, 8> cam_data;
     if (camera_connected) {
-      cam_data = get_camera_data();
+      try {
+        cam_data = get_camera_data();
+      } catch (...) {
+        hal::print<32>(*console, "Camera not connected...\n");
+      }
     } else {
       cam_data = std::array<hal::byte, 8>{ 0x00, 0x00, 0x00, 0x00,
                                            0x00, 0x00, 0x00, 0x00 };
@@ -120,8 +129,9 @@ void application()
     return_bytes[12] = checksum;
 
     hal::write(*rs485_transceiver, return_bytes, hal::never_timeout());
+    hal::print(*console, "\n");
 
-    hal::delay(*device_clock, 20ms);
+    // hal::delay(*device_clock, 20ms);
   }
 }
 
@@ -163,7 +173,7 @@ std::array<hal::byte, 2> get_strongest_signal(bool high_frequency)
   return_bytes[0] = position;
 
   // scale between 0 and 128 to only get 7 bits of data
-  auto scaled_float = hal::map(*strongest_value, { 0.0, 1.0 }, { 0.0, 128.0 });
+  auto scaled_float = hal::map(*strongest_value, { 0.0, 1.0 }, { 0.0, 127.0 });
   auto scaled_int = static_cast<uint8_t>(scaled_float);
   // send 1 bit for freq + 7 bits of data to transceiver for each PD
   auto trimmed_int = (scaled_int & 0b01111111);
@@ -280,6 +290,6 @@ std::array<hal::byte, 8> get_camera_data()
   uint16_t x = (return_bytes[1] << 8) | return_bytes[0];
   uint16_t y = (return_bytes[3] << 8) | return_bytes[2];
 
-  hal::print<20>(*console, "X: %u   Y: %u \n", x, y);
+  hal::print<20>(*console, "X: %u   Y: %u", x, y);
   return return_bytes;
 }
