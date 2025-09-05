@@ -58,3 +58,7 @@ conanbuildinfo.txt
 
 # CMake
 CMakeUserPresets.json
+
+/vex-code/bin
+/vex-code/build
+/vex-code/compile_commands.json
