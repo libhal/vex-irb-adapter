@@ -12,7 +12,8 @@
 #include "vex.h"
 
 namespace irb_adapter {
-enum camera_index {
+enum camera_index
+{
   x_center_low,
   x_center_hi,
   y_center_low,
@@ -23,9 +24,15 @@ enum camera_index {
   block_height_hi
 };
 
-enum photo_diode_index { diode_number, intensity_value };
+enum photo_diode_index
+{
+  diode_number,
+  intensity_value
+};
 
-adapter::adapter(uint8_t p_port) : m_port(p_port) {
+adapter::adapter(uint8_t p_port)
+  : m_port(p_port)
+{
   // make thread to run reads here
   char port_buffer[12];
   sprintf(port_buffer, "/dev/port%u", m_port);
@@ -35,16 +42,19 @@ adapter::adapter(uint8_t p_port) : m_port(p_port) {
   }
 }
 
-bool adapter::request_data(std::vector<char> &write_buffer,
-                           std::vector<char> &read_buffer) {
+bool adapter::request_data(std::vector<char>& write_buffer,
+                           std::vector<char>& read_buffer)
+{
   bool success = true;
   if (m_port_file == NULL) {
     printf("Port not open...\n");
     return false;
   }
 
-  auto bytes_written = fwrite(write_buffer.data(), sizeof write_buffer[0],
-                              write_buffer.size(), m_port_file);
+  auto bytes_written = fwrite(write_buffer.data(),
+                              sizeof write_buffer[0],
+                              write_buffer.size(),
+                              m_port_file);
   if (bytes_written != write_buffer.size()) {
     printf("Failed write to port, %u bytes written.\n", bytes_written);
     success = false;
@@ -66,47 +76,50 @@ bool adapter::request_data(std::vector<char> &write_buffer,
   return success;
 }
 
-adapter::low_freq_data adapter::get_low_freq_data() {
+adapter::low_freq_data adapter::get_low_freq_data()
+{
   std::vector<char> read_buffer(3);
-  std::vector<char> write_buffer = {'l'};
+  std::vector<char> write_buffer = { 'l' };
   adapter::low_freq_data return_data;
 
   if (request_data(write_buffer, read_buffer)) {
     // check checksum
     auto calculated_checksum =
-        read_buffer[diode_number] + read_buffer[intensity_value];
+      read_buffer[diode_number] + read_buffer[intensity_value];
     if (calculated_checksum != read_buffer.back()) {
       printf("Checksum mismatch...\n");
       return return_data;
     }
-    return_data.low_freq_photo_diode = (int)read_buffer[diode_number];
-    return_data.low_freq_value = (int)read_buffer[intensity_value] & 0b01111111;
+    return_data.strongest_photo_diode = (int)read_buffer[diode_number];
+    return_data.intensity = (int)read_buffer[intensity_value] & 0b01111111;
   }
   return return_data;
 }
 
-adapter::hi_freq_data adapter::get_hi_freq_data() {
+adapter::hi_freq_data adapter::get_hi_freq_data()
+{
   std::vector<char> read_buffer(3);
-  std::vector<char> write_buffer = {'h'};
+  std::vector<char> write_buffer = { 'h' };
   adapter::hi_freq_data return_data;
 
   if (request_data(write_buffer, read_buffer)) {
     // check checksum
     auto calculated_checksum =
-        read_buffer[diode_number] + read_buffer[intensity_value];
+      read_buffer[diode_number] + read_buffer[intensity_value];
     if (calculated_checksum != read_buffer.back()) {
       printf("Checksum mismatch...\n");
       return return_data;
     }
-    return_data.hi_freq_photo_diode = (int)read_buffer[diode_number];
-    return_data.hi_freq_value = (int)read_buffer[intensity_value] & 0b01111111;
+    return_data.strongest_photo_diode = (int)read_buffer[diode_number];
+    return_data.intensity = (int)read_buffer[intensity_value] & 0b01111111;
   }
   return return_data;
 }
 
-adapter::camera_data adapter::get_cam_data() {
+adapter::camera_data adapter::get_cam_data()
+{
   std::vector<char> read_buffer(9);
-  std::vector<char> write_buffer = {'c'};
+  std::vector<char> write_buffer = { 'c' };
   adapter::camera_data return_data;
 
   if (request_data(write_buffer, read_buffer)) {
@@ -131,4 +144,4 @@ adapter::camera_data adapter::get_cam_data() {
   return return_data;
 }
 
-} // namespace irb_adapter
+}  // namespace irb_adapter
