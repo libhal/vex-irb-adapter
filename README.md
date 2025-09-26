@@ -13,6 +13,8 @@ The USB-C port needed for flashing is covered by the top case as to not encourag
 TODO: pictures and explain USB is under top cover
 
 ## Flashing Adapter Via Webflasher (Recommended)
+TODO: add link to webflasher when done
+
 Connect adapter to computer via USB-C port and go to the [E10 adapter webflasher]().
 
 Click the connect and flash button and select the adapter in the pop-up.
