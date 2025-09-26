@@ -20,7 +20,8 @@ vex::limit front_bumper = limit(Brain.ThreeWirePort.A);
 bool beacon_pressed = false;
 bool object_collected = false;
 
-void switch_pressed() {
+void switch_pressed()
+{
   if (!beacon_pressed) {
     beacon_pressed = true;
   } else {
@@ -40,7 +41,8 @@ void switch_pressed() {
   this_thread::sleep_for(1000);
 }
 
-void spin(bool clockwise, uint8_t power) {
+void spin(bool clockwise, uint8_t power)
+{
   if (clockwise) {
     right_motor.spin(reverse, power, rpm);
     left_motor.spin(forward, power, rpm);
@@ -50,7 +52,8 @@ void spin(bool clockwise, uint8_t power) {
   }
 }
 
-int main() {
+int main()
+{
   irb_adapter::adapter board(1);
   uint8_t threshold = 5;
   uint8_t power = 40;
@@ -63,11 +66,14 @@ int main() {
     // check if bumper pressed
     if (!beacon_pressed) {
       auto low_freq_data = board.get_low_freq_data();
-      Brain.Screen.printAt(10, 20, "Low Frequency Beacon: PD %u: %u",
+      Brain.Screen.printAt(10,
+                           20,
+                           "Low Frequency Beacon: PD %u: %u",
                            low_freq_data.low_freq_photo_diode,
                            low_freq_data.low_freq_value);
       Brain.Screen.printAt(10, 40, "Camera Data: waiting...");
-      printf("LF %u:%u;\n", low_freq_data.low_freq_photo_diode,
+      printf("LF %u:%u;\n",
+             low_freq_data.low_freq_photo_diode,
              low_freq_data.low_freq_value);
 
       // spin in place if nothing detected
@@ -92,11 +98,18 @@ int main() {
     } else if (beacon_pressed && !object_collected) {
       auto cam_data = board.get_cam_data();
       Brain.Screen.printAt(10, 20, "Low Frequency Beacon: Collected");
-      Brain.Screen.printAt(10, 40, "Camera Data: %d, %u (%u X %u)",
-                           cam_data.x_center, cam_data.y_center,
-                           cam_data.block_width, cam_data.block_height);
-      printf("Camera Data: X:%u Y:%u    %ux%u\n", cam_data.x_center,
-             cam_data.y_center, cam_data.block_width, cam_data.block_height);
+      Brain.Screen.printAt(10,
+                           40,
+                           "Camera Data: %d, %u (%u X %u)",
+                           cam_data.x_center,
+                           cam_data.y_center,
+                           cam_data.block_width,
+                           cam_data.block_height);
+      printf("Camera Data: X:%u Y:%u    %ux%u\n",
+             cam_data.x_center,
+             cam_data.y_center,
+             cam_data.block_width,
+             cam_data.block_height);
 
       // spin in place if nothing detected
       if (cam_data.block_width == 0) {
