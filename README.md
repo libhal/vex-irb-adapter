@@ -12,12 +12,10 @@ purchased from [Pololu](https://www.pololu.com/product/5592) due to great value
 and reliability. To enclose the adaptor and make it easier to use we designed a
 [3D printed enclosure on OnShape](https://cad.onshape.com/documents/ee69ea771b3426ac97776444/w/45ac0aa7c9bd20a1984d74b6/e/4c369e0476760c7468856e8b?renderMode=0&uiState=68d6b1c8a8c68f57f9c83bdb) with heated inserts to allow quick assembly and disassembly.
 
-The code in this repo contains the firmware for the adapter, as well as examples
-for how to write code for the vex. The `/vex-code/` folder contains templates
-and examples on how to write code using VS Code with the
-[VEX extension](https://www.vexrobotics.com/vexcode/vscode-extension), as well
-as single file examples that are created and used with the
-[Vex Web Editor](https://codev5.vex.com/).
+The code in this repo contains the firmware for the adapter, as well as an example
+and a template to be used on the Vex located in the `/vex-code/` folder. The files in the vex-code 
+folder are to be used in the [Vex Web Editor](https://codev5.vex.com/) or in VS Code with the 
+[VEX extension](https://www.vexrobotics.com/vexcode/vscode-extension).
 
 # Getting Started (Writing Code for Vex)
 
