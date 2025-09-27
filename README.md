@@ -19,7 +19,7 @@ and examples on how to write code using VS Code with the
 as single file examples that are created and used with the
 [Vex Web Editor](https://codev5.vex.com/).
 
-## Getting Started
+# Getting Started (Writing Code for Vex)
 
 To get access to the starter files on your computer you can download everything
 by clicking the Green `🟩 Code <>` drop down button on the top of the page, and
@@ -38,23 +38,26 @@ navigate to the `Download Zip` button to download a zip of this project.
 Here is a link to the web based development software:
 [CodeV5 By Vex](https://codev5.vex.com/). To open the starter project navigate,
 from the web interface, select "File" then "Open" then navigate to the location
-where you installed this project and open the `single-file-code/` template
-folder.
+where you installed this project and open the `vex-code/` folder and select `template.v5cpp`.
+
+The downward facing arrow next to `#pragma region IRB Adapter Code` can be clicked to collapse the helper
+class for a cleaner view.
+![collapse](assets/collapse-arrow.jpg)
 
 ### Using Visual Studio Code (VSCode)
 
 You can also use [Visual Studio Code](https://code.visualstudio.com/) to write
-software for the VEX5 Brain. To use the `vs-code-template`, first
+software for the VEX5 Brain.
 
 - Install the [Vex Robotics](https://marketplace.visualstudio.com/items?itemName=VEXRobotics.vexcode) extension.
 - Open the Vex extension tab in VSCode and select "Import Project"
-- Find the downloaded project and open the `vs-code-template` folder.
+- Find the downloaded project and select `template.v5cpp`.
 
-### Requesting and Receiving Data With Helper Code
+## Requesting and Receiving Data With Helper Code
 
-The templates provide a helper class and functions to assist in asking for data
-from the adaptor. They each return a struct containing the needed data and are
-explained below.
+The template provides a helper class and functions to assist in asking for data
+from the adapter. They each return a struct containing the needed data and are
+further explained below.
 
 #### Low Frequency IR Data
 
@@ -81,7 +84,8 @@ struct hi_freq_data {
   uint8_t intensity = 0; // from 0 to 127
 };
 
-irb_adapter::adapter board(1); // using port 1 (can be changed)
+const int port_number = 1;
+irb_adapter::adapter board(port_number); // using port 1 (can be changed)
 auto data = board.get_hi_freq_data();
 ```
 
@@ -96,14 +100,16 @@ struct camera_data {
   uint16_t height = 0;
 };
 
-irb_adapter::adapter board(1);
+const int port_number = 1;
+irb_adapter::adapter board(port_number);
 auto data = board.get_cam_data();
 ```
 
 ### Example Data Usage
 
 ```c++
-irb_adapter::adapter board(1);
+const int port_number = 1;
+irb_adapter::adapter board(port_number);
 
 while (true) {
   auto data = board.get_hi_freq_data();
@@ -112,14 +118,15 @@ while (true) {
 }
 ```
 
+## Getting Started (Adapter)
 Adapters must be programmed in order to work properly. We **highly recommend**
 using the Web Flasher method for programming the devices as it is the most
 straight forward. The USB-C port needed for programming which is covered by the
 top case. Three screws on the bottom of the case can be unscrewed to release the
 top from the bottom.
 
-> [!NOTE]
-> TODO: Add pictures to visualize the location of the USB is under top cover
+![](assets/case-bottom.jpg)
+![](assets/case-off.jpg)
 
 ### Programming Adapter Via Web Flasher (Recommended)
 
