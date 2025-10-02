@@ -1,4 +1,4 @@
-name: ✅ Build
+name: Firmware Build Status
 
 on:
   workflow_dispatch:

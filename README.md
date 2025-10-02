@@ -1,5 +1,7 @@
 # Vex IRB Adapter
 
+[![✅ Firmware Build](https://github.com/libhal/vex-irb-adapter/actions/workflows/build.yml/badge.svg)](https://github.com/libhal/vex-irb-adapter/actions/workflows/build.yml)
+
 This project is an adapter for the SJSU E10 Infrared Receiver Board to allow
 communication with Vex 5 brain through use of a RS485 tranceiver and an RJ11
 port (commonly called a smart port on Vex side). The adaptor has a QWIIC
