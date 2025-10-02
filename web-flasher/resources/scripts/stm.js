@@ -136,7 +136,7 @@ class StmDevice extends SerialDevice {
       const modalText = document.querySelector("#program-status-message");
 
       modalText.innerText = "Flashing latest firmware. Please wait...";
-      this.flashContent = await tools.readBinary("/resources/binaries/e10-adapter-v1.bin");
+      this.flashContent = await tools.readBinary("resources/binaries/app.elf.bin");
       let startAddress = parseInt("0x8000000");
 
       await this.writeBlocks(this.flashContent, startAddress, updateProgressBar);
@@ -146,11 +146,9 @@ class StmDevice extends SerialDevice {
         dataTerminalReady: false, // RESET HIGH
         requestToSend: true, // return BOOT to LOW
       });
-      document.querySelector("#program-status-message").innerText = "Flash complete! Device is disconnected and ready to use!";
+      document.querySelector("#program-status-message").innerText = "Flash complete! Device is ready to be disconnected and use!";
 
       console.log("Resetting Device...");
-      // double reset used to make sure device is ready to use when disconnected (needed for cmsis-dap bin)
-      await this.resetDevice();
       await sleep(200);
       await this.resetDevice();
     }
