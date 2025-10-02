@@ -17,6 +17,7 @@ jobs:
       compiler_profile: v1/arm-gcc-12.3
       platform_profile_url: https://github.com/libhal/libhal-micromod.git
       platform_profile: v1/mod-lpc40-v5
+      conan_build_dir: adapter-firmware
     secrets: inherit
 
   build-mod-stm32f1-v4:
@@ -26,6 +27,7 @@ jobs:
       compiler_profile: v1/arm-gcc-12.3
       platform_profile_url: https://github.com/libhal/libhal-micromod.git
       platform_profile: v1/mod-stm32f1-v4
+      conan_build_dir: adapter-firmware
     secrets: inherit
 
   build-lpc4078:
@@ -35,6 +37,7 @@ jobs:
       compiler_profile: v1/arm-gcc-12.3
       platform_profile_url: https://github.com/libhal/libhal-arm-mcu.git
       platform_profile: v1/lpc4078
+      conan_build_dir: adapter-firmware
     secrets: inherit
 
   build-stm32f103c8:
@@ -44,4 +47,5 @@ jobs:
       compiler_profile: v1/arm-gcc-12.3
       platform_profile_url: https://github.com/libhal/libhal-arm-mcu.git
       platform_profile: v1/stm32f103c8
+      conan_build_dir: adapter-firmware
     secrets: inherit
