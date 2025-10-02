@@ -142,7 +142,7 @@ Programming using the Web Flasher also requires a chrome based browser.
 
 To program the device:
 
-1. Connect adapter to computer via USB-C port and go to the [E10 adapter webflasher]().
+1. Connect adapter to computer via USB-C port and go to the [E10 adapter webflasher](https://libhal.github.io/vex-irb-adapter/web-flasher).
 2. Click the connect and flash button and select the adapter in the pop-up.
 
 > [!TIP]
