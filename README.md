@@ -17,7 +17,7 @@ and a template to be used on the Vex located in the `/vex-code/` folder. The fil
 folder are to be used in the [Vex Web Editor](https://codev5.vex.com/) or in VS Code with the 
 [VEX extension](https://www.vexrobotics.com/vexcode/vscode-extension).
 
-# Getting Started (Writing Code for Vex)
+## Getting Started (Writing Code for Vex)
 
 To get access to the starter files on your computer you can download everything
 by clicking the Green `🟩 Code <>` drop down button on the top of the page, and
@@ -116,12 +116,20 @@ while (true) {
 }
 ```
 
-## Getting Started (Adapter)
+## Programming the Adapter
+
+> [!NOTE]
+> If an adapter has been provided to you by an instructor of your class, such
+> as the E10 course at San Jose State University, then the device has been
+> pre-programmed and should work out of the box. If the device does not work
+> report it to your instructor and request a replacement if one exists.
+
 Adapters must be programmed in order to work properly. We **highly recommend**
 using the Web Flasher method for programming the devices as it is the most
-straight forward. The USB-C port needed for programming which is covered by the
-top case. Three screws on the bottom of the case can be unscrewed to release the
-top from the bottom.
+straight forward. The USB-C port to program the device is covered by the
+top case. To remove the top case cover, locate the three screws on the bottom 
+of the case, and unscrewed them. The top should come off with the board still
+connected to the bottom of the case.
 
 ![](assets/case-bottom.jpg)
 ![](assets/case-off.jpg)
