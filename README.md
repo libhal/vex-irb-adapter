@@ -151,9 +151,6 @@ To program the device:
 
 3. Wait until device is fully flashed, then you are free to disconnect device and use.
 
-> [!NOTE]
-> TODO: Add link to webflasher when done
-
 ### Building and Flashing Manually
 
 You will need experience working with a terminal (also called command line) in order to build manually.
