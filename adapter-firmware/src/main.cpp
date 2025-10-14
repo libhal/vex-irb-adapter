@@ -91,7 +91,6 @@ void application()
       hal::byte checksum = lf_results[0] + lf_results[1];
       return_bytes = { lf_results[0], lf_results[1], checksum };
       hal::write(*rs485_transceiver, return_bytes, hal::never_timeout());
-      hal::print(*console, "LF PD: ");
 
     } else if (read_bytes[0] == 'h') {  // hi freq request
       std::array<hal::byte, 3> return_bytes;
@@ -108,17 +107,21 @@ void application()
         try {
           cam_data = get_camera_data();
         } catch (...) {
-          hal::print<32>(*console, "Camera not connected...\n");
+          hal::print<32>(*console, "Camera error...\n");
         }
       } else {
+        hal::print<32>(*console, "Camera not connected...\n");
         cam_data = std::array<hal::byte, 9>{ 0x00, 0x00, 0x00, 0x00, 0x00,
                                              0x00, 0x00, 0x00, 0x00 };
       }
+      // send camera data to vex
+      hal::write(*rs485_transceiver, cam_data, hal::never_timeout());
+      hal::delay(*device_clock, 10ms);
     } else {
       hal::print(*console, "unkown read");
     }
     hal::print(*console, "\n");
-    // hal::delay(*device_clock, 10ms);
+    hal::delay(*device_clock, 10ms);
   }
 }
 
@@ -183,24 +186,10 @@ bool camera_init()
   constexpr hal::byte header2 = 0xAA;
   constexpr hal::byte knock_cmd = 0x2C;
   constexpr hal::byte knock_checksum = 0x3C;
-  constexpr hal::byte change_algorithm_cmd = 0x2D;
-  constexpr hal::byte change_algorithm_checksum = 0x40;
-  constexpr hal::byte obj_tracking_algorithm1 = 0x01;
-  constexpr hal::byte obj_tracking_algorithm2 = 0x00;
   constexpr hal::byte ok_cmd = 0x2E;
 
   constexpr std::array<hal::byte, 6> knock_bytes{
     header1, header2, protocol_address, 0x00, knock_cmd, knock_checksum
-  };
-  constexpr std::array<hal::byte, 8> algo_change_bytes{
-    header1,
-    header2,
-    protocol_address,
-    0x02,
-    change_algorithm_cmd,
-    obj_tracking_algorithm1,
-    obj_tracking_algorithm2,
-    change_algorithm_checksum
   };
 
   std::array<hal::byte, 6> ok_buffer;
@@ -210,14 +199,7 @@ bool camera_init()
     *i2c, camera_address, knock_bytes, ok_buffer, hal::never_timeout());
   // check read for ok
   if (ok_buffer[4] != ok_cmd) {
-    return false;
-  }
-  ok_buffer = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-  // set algorithm to object tracking
-  hal::write_then_read(
-    *i2c, camera_address, algo_change_bytes, ok_buffer, hal::never_timeout());
-  // check read for ok
-  if (ok_buffer[4] != ok_cmd) {
+    hal::print(*console, "Camera knock not ok.\n");
     return false;
   }
   return true;
