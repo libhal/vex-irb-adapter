@@ -102,7 +102,8 @@ void application()
       hal::write(*rs485_transceiver, return_bytes, hal::never_timeout());
 
     } else if (read_bytes[0] == 'c') {  // cam request
-      std::array<hal::byte, 9> cam_data;
+      std::array<hal::byte, 9> cam_data{ 0x00, 0x00, 0x00, 0x00, 0x00,
+                                         0x00, 0x00, 0x00, 0x00 };
       if (camera_connected) {
         try {
           cam_data = get_camera_data();
@@ -110,9 +111,12 @@ void application()
           hal::print<32>(*console, "Camera error...\n");
         }
       } else {
-        hal::print<32>(*console, "Camera not connected...\n");
-        cam_data = std::array<hal::byte, 9>{ 0x00, 0x00, 0x00, 0x00, 0x00,
-                                             0x00, 0x00, 0x00, 0x00 };
+        try {
+          camera_connected = camera_init();
+          cam_data = get_camera_data();
+        } catch (...) {
+          hal::print<32>(*console, "Camera not connected...\n");
+        }
       }
       // send camera data to vex
       hal::write(*rs485_transceiver, cam_data, hal::never_timeout());
