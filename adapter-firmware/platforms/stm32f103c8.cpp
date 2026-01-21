@@ -44,25 +44,48 @@ namespace resources {
 using namespace hal::literals;
 using st_peripheral = hal::stm32f1::peripheral;
 
+std::array<hal::byte, 1024> driver_memory{};
+std::pmr::monotonic_buffer_resource resource(driver_memory.data(),
+                                             driver_memory.size(),
+                                             std::pmr::null_memory_resource());
+
 std::pmr::polymorphic_allocator<> driver_allocator()
 {
-  static std::array<hal::byte, 1024> driver_memory{};
-  static std::pmr::monotonic_buffer_resource resource(
-    driver_memory.data(),
-    driver_memory.size(),
-    std::pmr::null_memory_resource());
   return &resource;
 }
 
-auto& gpio_a()
+hal::v5::optional_ptr<hal::stm32f1::gpio<st_peripheral::gpio_a>> gpio_a_ptr;
+hal::v5::optional_ptr<hal::stm32f1::gpio<st_peripheral::gpio_b>> gpio_b_ptr;
+hal::v5::optional_ptr<hal::stm32f1::gpio<st_peripheral::gpio_c>> gpio_c_ptr;
+
+hal::v5::strong_ptr<hal::stm32f1::gpio<st_peripheral::gpio_a>> gpio_a()
 {
-  static hal::stm32f1::gpio<st_peripheral::gpio_a> gpio;
-  return gpio;
+  if (not gpio_a_ptr) {
+    gpio_a_ptr =
+      hal::v5::make_strong_ptr<hal::stm32f1::gpio<st_peripheral::gpio_a>>(
+        driver_allocator());
+  }
+  return gpio_a_ptr;
 }
-auto& gpio_b()
+
+hal::v5::strong_ptr<hal::stm32f1::gpio<st_peripheral::gpio_b>> gpio_b()
 {
-  static hal::stm32f1::gpio<st_peripheral::gpio_b> gpio;
-  return gpio;
+  if (not gpio_b_ptr) {
+    gpio_b_ptr =
+      hal::v5::make_strong_ptr<hal::stm32f1::gpio<st_peripheral::gpio_b>>(
+        driver_allocator());
+  }
+  return gpio_b_ptr;
+}
+
+hal::v5::strong_ptr<hal::stm32f1::gpio<st_peripheral::gpio_c>> gpio_c()
+{
+  if (not gpio_c_ptr) {
+    gpio_c_ptr =
+      hal::v5::make_strong_ptr<hal::stm32f1::gpio<st_peripheral::gpio_c>>(
+        driver_allocator());
+  }
+  return gpio_c_ptr;
 }
 
 hal::v5::optional_ptr<hal::cortex_m::dwt_counter> clock_ptr;
@@ -97,39 +120,38 @@ hal::v5::strong_ptr<hal::adc> intensity()
 
 hal::v5::strong_ptr<hal::i2c> i2c()
 {
-  static auto sda_output_pin = gpio_b().acquire_output_pin(7);
-  static auto scl_output_pin = gpio_b().acquire_output_pin(6);
+  static auto sda_output_pin =
+    hal::acquire_output_pin(driver_allocator(), gpio_b(), 7);
+  static auto scl_output_pin =
+    hal::acquire_output_pin(driver_allocator(), gpio_b(), 6);
   auto clock = resources::clock();
-  return hal::v5::make_strong_ptr<hal::bit_bang_i2c>(driver_allocator(),
-                                                     hal::bit_bang_i2c::pins{
-                                                       .sda = &sda_output_pin,
-                                                       .scl = &scl_output_pin,
-                                                     },
-                                                     *clock);
+  return hal::v5::make_strong_ptr<hal::bit_bang_i2c>(
+    driver_allocator(),
+    hal::bit_bang_i2c::pins{
+      .sda = &(*sda_output_pin),
+      .scl = &(*scl_output_pin),
+    },
+    *clock);
 }
 
 hal::v5::strong_ptr<hal::output_pin> counter_reset()
 {
-  return hal::v5::make_strong_ptr<decltype(gpio_b().acquire_output_pin(14))>(
-    driver_allocator(), gpio_b().acquire_output_pin(14));
+  return hal::acquire_output_pin(driver_allocator(), gpio_b(), 14);
 }
 
 hal::v5::strong_ptr<hal::output_pin> accumulator_reset()
 {
-  return hal::v5::make_strong_ptr<decltype(gpio_b().acquire_output_pin(13))>(
-    driver_allocator(), gpio_b().acquire_output_pin(13));
+  return hal::acquire_output_pin(driver_allocator(), gpio_b(), 13);
 }
 
 hal::v5::strong_ptr<hal::output_pin> frequency_select()
 {
-  return hal::v5::make_strong_ptr<decltype(gpio_b().acquire_output_pin(12))>(
-    driver_allocator(), gpio_b().acquire_output_pin(12));
+  return hal::acquire_output_pin(driver_allocator(), gpio_b(), 12);
 }
 
 hal::v5::strong_ptr<hal::output_pin> transceiver_direction()
 {
-  return hal::v5::make_strong_ptr<decltype(gpio_a().acquire_output_pin(0))>(
-    driver_allocator(), gpio_a().acquire_output_pin(0));
+  return hal::acquire_output_pin(driver_allocator(), gpio_a(), 0);
 }
 
 // Watchdog implementation using global function pattern from original
