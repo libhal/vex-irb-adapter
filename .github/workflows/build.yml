@@ -1,17 +1,40 @@
-name: Firmware Build Status
+name: 🚀 Deploy Adapter Firmware
 
 on:
   workflow_dispatch:
+  release:
+    types:
+      - published
   pull_request:
   push:
     branches:
       - main
 
 jobs:
-  build-stm32f103c8:
-    uses: libhal/ci/.github/workflows/app_builder2.yml@5.x.y
-    with:
-      compiler_profile: hal/tc/arm-gcc
-      platform_profile: hal/mcu/stm32f103c8
-      dir: adapter-firmware
-    secrets: inherit
+  build:
+    name: 🚀 Build & Upload Adapter Firmware
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4.1.1
+        with:
+          submodules: true
+
+      - name: 📥 Install Conan >=2.16.1
+        run: pipx install conan>=2.16.1
+
+      - name: 📡 Install libhal conan configuration
+        run: conan config install https://github.com/libhal/conan-config2.git
+
+      - name: 📡 Run hal setup
+        run: conan hal setup
+
+      - name: 📦 Build adapter firmware for target "stm32f103c8"
+        run: conan build adapter-firmware -pr:a hal/tc/gcc -pr:h hal/mcu/stm32f103c8
+
+      - name: 🚀 Push Binaries to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            adapter-firmware/build/stm32f103c8/MinSizeRel/app.elf
+            adapter-firmware/build/stm32f103c8/MinSizeRel/app.elf.bin
