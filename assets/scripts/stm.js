@@ -3,7 +3,7 @@ const MAX_WRITE_BLOCK_SIZE = 256;
 const MAX_READ_BLOCK_SIZE = 256;
 
 const ACK = 0x79;
-const SYNCHR = 0x7F;
+const SYNCHR = 0x7f;
 const CMD_GET = 0x00;
 const CMD_GID = 0x02;
 const CMD_READ = 0x11;
@@ -13,10 +13,12 @@ const CMD_ERASE = 0x43;
 
 const tools = {
   numberToArray: function (number, arraySize) {
-    var i, temp = number, result = [];
+    var i,
+      temp = number,
+      result = [];
 
     for (i = 0; i < arraySize; i++) {
-      result.unshift(temp & 0xFF);
+      result.unshift(temp & 0xff);
       temp = temp >> 8;
     }
 
@@ -45,24 +47,14 @@ const tools = {
     return result;
   },
 
-  readBinary: function (binary_name) {
-    return new Promise((resolve, reject) => {
-      console.log('Reading Binary..');
-      const req = new XMLHttpRequest();
-      req.open("GET", binary_name, true);
-      req.responseType = "arraybuffer";
-      req.onload = (event) => {
-        const arrayBuffer = req.response;
-        if (arrayBuffer) {
-          const binaryBytes = new Uint8Array(arrayBuffer);
-          console.log('Received binary bytes!');
-          resolve(binaryBytes);
-        }
-      };
-      req.send(null);
-    });
-  }
-}
+  readBinary: async function (url) {
+    console.log("Reading Binary..");
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    console.log("Received binary bytes!");
+    return new Uint8Array(arrayBuffer);
+  },
+};
 
 class StmDevice extends SerialDevice {
   constructor() {
@@ -114,7 +106,6 @@ class StmDevice extends SerialDevice {
   async flash(updateProgressBar) {
     let previous_handler = this.onDataCallback;
     try {
-
       let settings = { baudRate: 115200, parity: "even" };
       await sleep(200);
 
@@ -130,29 +121,33 @@ class StmDevice extends SerialDevice {
       console.log("Retrieving device information...");
       await this.getDeviceInfo();
 
-      console.log('Erasing flash...');
+      console.log("Erasing flash...");
       await this.eraseFlash();
 
       const modalText = document.querySelector("#program-status-message");
 
       modalText.innerText = "Flashing latest firmware. Please wait...";
-      this.flashContent = await tools.readBinary("resources/binaries/app.elf.bin");
+      this.flashContent = await tools.readBinary("assets/app.elf.bin");
       let startAddress = parseInt("0x8000000");
 
-      await this.writeBlocks(this.flashContent, startAddress, updateProgressBar);
-      console.log('STM Write complete, Starting code execution');
+      await this.writeBlocks(
+        this.flashContent,
+        startAddress,
+        updateProgressBar,
+      );
+      console.log("STM Write complete, Starting code execution");
       await this.goToAddress(startAddress);
       await this.setSignals({
         dataTerminalReady: false, // RESET HIGH
         requestToSend: true, // return BOOT to LOW
       });
-      document.querySelector("#program-status-message").innerText = "Flash complete! Device is ready to be disconnected and use!";
+      document.querySelector("#program-status-message").innerText =
+        "Flash complete! Device is ready to be disconnected and use!";
 
       console.log("Resetting Device...");
       await sleep(200);
       await this.resetDevice();
-    }
-    catch (error) {
+    } catch (error) {
       console.log(error);
       this.error = error;
       this.onDataCallback = previous_handler;
@@ -165,18 +160,17 @@ class StmDevice extends SerialDevice {
    */
   async clearBuffer() {
     try {
-      // If device is sending messages over serial before pressing the 
+      // If device is sending messages over serial before pressing the
       // program button, the buffer will be backed up with garbage bytes.
       // This loop will readout the buffer until it times out, at which point
       // the buffer will be ready to send commands and read responses during
       // the flashing sequence.
       while (true) {
-        console.log('reading...');
+        console.log("reading...");
         await this.read(1, 100);
       }
-    }
-    catch (err) {
-      console.log('Read buffer empty!');
+    } catch (err) {
+      console.log("Read buffer empty!");
     }
   }
 
@@ -191,14 +185,15 @@ class StmDevice extends SerialDevice {
         let response = await this.read(1, 500);
         if (response[0] !== ACK) {
           console.log(response);
-          throw new Error('Unexpected response sending sync.');
+          throw new Error("Unexpected response sending sync.");
         }
-        await this.writer.write(tools.u8Array([CMD_GET, 0xFF]));
+        await this.writer.write(tools.u8Array([CMD_GET, 0xff]));
         response = await this.read(15, 10000);
         if (response[0] !== ACK) {
-          throw new Error('Unexpected response sending GET.');
+          throw new Error("Unexpected response sending GET.");
         }
-        this.bootLoaderVersion = (response[2] >> 4) + '.' + (response[2] & 0x0F);
+        this.bootLoaderVersion =
+          (response[2] >> 4) + "." + (response[2] & 0x0f);
         console.log(`bl version: ${this.bootLoaderVersion}`);
 
         for (let i = 0; i < response[1]; i++) {
@@ -206,18 +201,20 @@ class StmDevice extends SerialDevice {
         }
         console.log(`commands count: ${this.commands.length}`);
         if (this.commands.indexOf(CMD_GID) !== -1) {
-          this.deviceType = 'STM32';
-        }
-        else {
+          this.deviceType = "STM32";
+        } else {
           // not an STM32
-          throw (new Error('Device must be STM32.'));
+          throw new Error("Device must be STM32.");
         }
-        await this.writer.write(tools.u8Array([CMD_GID, 0xFD]));
+        await this.writer.write(tools.u8Array([CMD_GID, 0xfd]));
         response = await this.read(5, 200);
         if (response[0] !== ACK) {
-          throw new Error('Unexpected response getting id.');
+          throw new Error("Unexpected response getting id.");
         }
-        let pid = '0x' + tools.byteToHexstr(response[2]) + tools.byteToHexstr(response[3]);
+        let pid =
+          "0x" +
+          tools.byteToHexstr(response[2]) +
+          tools.byteToHexstr(response[3]);
         console.log(pid);
         this.pid = pid;
       } catch (error) {
@@ -239,29 +236,30 @@ class StmDevice extends SerialDevice {
       let addressFrame;
 
       if (!Number.isInteger(address)) {
-        throw (new Error('Invalid address parameter'));
+        throw new Error("Invalid address parameter");
       }
 
       if (!this.isConnected()) {
-        throw (new Error('Connection must be established before sending commands'));
+        throw new Error(
+          "Connection must be established before sending commands",
+        );
       }
 
       addressFrame = tools.numberToArray(address, 4);
       addressFrame.push(tools.calcChecksum(addressFrame, false));
 
-      await this.writer.write(tools.u8Array([CMD_GO, 0xDE]));
+      await this.writer.write(tools.u8Array([CMD_GO, 0xde]));
       let response = await this.read(1, 200);
       if (response[0] !== ACK) {
-        throw new Error('Unexpected response sending GO command');
+        throw new Error("Unexpected response sending GO command");
       }
       await this.writer.write(tools.u8Array(addressFrame));
       response = await this.read(1, 200);
       if (response[0] !== ACK) {
-        throw new Error('Unexpected response writing address frame');
+        throw new Error("Unexpected response writing address frame");
       }
-      console.log('done sending GO command...');
-    }
-    catch (error) {
+      console.log("done sending GO command...");
+    } catch (error) {
       if (this.isConnected()) {
         this.error = error;
         await this.disconnect();
@@ -279,10 +277,20 @@ class StmDevice extends SerialDevice {
   async writeBlocks(data, address, onProgress) {
     try {
       if (!this.isConnected()) {
-        throw (new Error('Connection must be established before sending commands'));
+        throw new Error(
+          "Connection must be established before sending commands",
+        );
       }
 
-      console.log('Writing ' + data.length + ' bytes to flash at address 0x' + address.toString(16) + ' using ' + this.writeBlockSize + ' bytes chunks');
+      console.log(
+        "Writing " +
+          data.length +
+          " bytes to flash at address 0x" +
+          address.toString(16) +
+          " using " +
+          this.writeBlockSize +
+          " bytes chunks",
+      );
       let blocksCount = Math.ceil(data.byteLength / this.writeBlockSize);
 
       let offset = 0;
@@ -300,7 +308,7 @@ class StmDevice extends SerialDevice {
       }
       for (let i = 0; i < blocks.length; i++) {
         let block = blocks[i];
-        console.log('Writing block ' + (i + 1) + '/' + blocksCount);
+        console.log("Writing block " + (i + 1) + "/" + blocksCount);
         if (onProgress) {
           onProgress((i + 1) / blocksCount);
         }
@@ -311,31 +319,33 @@ class StmDevice extends SerialDevice {
         frame.set(block.data, 1);
         frame[frame.length - 1] = checksum;
 
-        let addressFrame = tools.numberToArray(address + i * this.writeBlockSize, 4);
+        let addressFrame = tools.numberToArray(
+          address + i * this.writeBlockSize,
+          4,
+        );
         addressFrame.push(tools.calcChecksum(addressFrame, false));
-        await this.writer.write(tools.u8Array([CMD_WRITE, 0xCE]));
+        await this.writer.write(tools.u8Array([CMD_WRITE, 0xce]));
         response = await this.read(1, 200);
         if (response[0] !== ACK) {
           console.log(response);
-          throw new Error('Unexpected response sending WRITE');
+          throw new Error("Unexpected response sending WRITE");
         }
 
         await this.writer.write(tools.u8Array(addressFrame));
         response = await this.read(1, 200);
         if (response[0] !== ACK) {
-          throw new Error('Unexpected response writing addressframe');
+          throw new Error("Unexpected response writing addressframe");
         }
 
         await this.writer.write(frame);
         response = await this.read(1, 300);
         if (response[0] !== ACK) {
-          throw new Error('Unexpected response writing frame');
+          throw new Error("Unexpected response writing frame");
         }
       }
-      console.log('Finished writing');
+      console.log("Finished writing");
       await sleep(200);
-    }
-    catch (error) {
+    } catch (error) {
       console.log(error);
       if (this.isConnected()) {
         this.error = error;
@@ -350,31 +360,34 @@ class StmDevice extends SerialDevice {
   async eraseFlash() {
     try {
       if (!this.isConnected()) {
-        throw (new Error('Connection must be established before sending commands'));
+        throw new Error(
+          "Connection must be established before sending commands",
+        );
       }
 
       if (!this.commands.length) {
-        throw (new Error('Execute GET command first'));
+        throw new Error("Execute GET command first");
       }
 
       if (this.commands.indexOf(CMD_ERASE) === -1) {
-        throw (new Error('CMD_ERASE command is not supported by the current target'));
+        throw new Error(
+          "CMD_ERASE command is not supported by the current target",
+        );
       }
 
-      await this.writer.write(tools.u8Array([CMD_ERASE, 0xFF ^ CMD_ERASE]));
+      await this.writer.write(tools.u8Array([CMD_ERASE, 0xff ^ CMD_ERASE]));
       let response = await this.read(1, 200);
       if (response[0] !== ACK) {
-        throw new Error('Unexpected response');
+        throw new Error("Unexpected response");
       }
-      await this.writer.write(tools.u8Array([0xFF, 0x00]));
+      await this.writer.write(tools.u8Array([0xff, 0x00]));
       await sleep(30);
       response = await this.read(1, 200);
       if (response[0] !== ACK) {
-        throw new Error('Unexpected response');
+        throw new Error("Unexpected response");
       }
-      console.log('Erase flash complete!');
-    }
-    catch (error) {
+      console.log("Erase flash complete!");
+    } catch (error) {
       if (this.isConnected()) {
         this.error = error;
         await this.disconnect();

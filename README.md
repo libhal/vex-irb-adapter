@@ -15,8 +15,8 @@ and reliability. To enclose the adaptor and make it easier to use we designed a
 [3D printed enclosure on OnShape](https://cad.onshape.com/documents/ee69ea771b3426ac97776444/w/45ac0aa7c9bd20a1984d74b6/e/4c369e0476760c7468856e8b?renderMode=0&uiState=68d6b1c8a8c68f57f9c83bdb) with heated inserts to allow quick assembly and disassembly.
 
 The code in this repo contains the firmware for the adapter, as well as an example
-and a template to be used on the Vex located in the `/vex-code/` folder. The files in the vex-code 
-folder are to be used in the [Vex Web Editor](https://codev5.vex.com/) or in VS Code with the 
+and a template to be used on the Vex located in the `/vex-code/` folder. The files in the vex-code
+folder are to be used in the [Vex Web Editor](https://codev5.vex.com/) or in VS Code with the
 [VEX extension](https://www.vexrobotics.com/vexcode/vscode-extension).
 
 ## Getting Started (Writing Code for Vex)
@@ -129,32 +129,31 @@ while (true) {
 Adapters must be programmed in order to work properly. We **highly recommend**
 using the Web Flasher method for programming the devices as it is the most
 straight forward. The USB-C port to program the device is covered by the
-top case. To remove the top case cover, locate the three screws on the bottom 
+top case. To remove the top case cover, locate the three screws on the bottom
 of the case, and unscrewed them. The top should come off with the board still
 connected to the bottom of the case.
 
 ![](assets/case-bottom.jpg)
 ![](assets/case-off.jpg)
 
-### Programming Adapter Via Web Flasher (Recommended)
+### Programming Adapter Via Web Programmer (Recommended)
 
-Programming using the Web Flasher also requires a chrome based browser.
+Programming using the Web Programmer requires a chrome based browser.
 
 To program the device:
 
-1. Connect adapter to computer via USB-C port and go to the [E10 adapter webflasher](https://libhal.github.io/vex-irb-adapter/web-flasher).
+1. Connect adapter to computer via USB-C port and go to the [E10 adapter web programmer](https://libhal.github.io/vex-irb-adapter/).
 2. Click the connect and flash button and select the adapter in the pop-up.
+3. Wait until device is fully flashed, then you are free to disconnect device and use.
 
 > [!TIP]
-> If you are unsure which device to choose, unplug and replug the adapter in while the
-> pop-up is open.
-
-3. Wait until device is fully flashed, then you are free to disconnect device and use.
+> If you are unsure which device to choose, unplug and re-plug the adapter in
+> while the pop-up is open.
 
 ### Building and Flashing Manually
 
-You will need experience working with a terminal (also called command line) in order to 
-build manually.
+You will need experience working with a terminal (also called command line) in
+order to build manually.
 
 Before getting started, if you haven't used libhal before, follow the
 [Getting Started](https://libhal.github.io/latest/getting_started/) guide.
@@ -200,11 +199,11 @@ but the `______` is replaced with a serial number.
 
 ### Communication Protocol
 
-The Vex adapter communicates with the Husky AI Camera using a simple I2C protocol. 
-The host (e.g., Vex code) sends a single byte to request data. The camera responds 
-with a fixed-length byte stream containing sensor data and a checksum. The 
-checksum  is computed as the **8-bit sum of all received bytes** 
-(modulo 256). If the checksum does not match, the data is considered corrupted, and 
+The Vex adapter communicates with the Husky AI Camera using a simple I2C protocol.
+The host (e.g., Vex code) sends a single byte to request data. The camera responds
+with a fixed-length byte stream containing sensor data and a checksum. The
+checksum  is computed as the **8-bit sum of all received bytes**
+(modulo 256). If the checksum does not match, the data is considered corrupted, and
 should be discarded by the VEX controller. The VEX control may make another request
 in order to get proper data.
 
