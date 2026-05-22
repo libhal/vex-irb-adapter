@@ -58,6 +58,7 @@ playVexcodeSound(const char* soundName)
 }
 
 #pragma endregion VEXcode Generated Robot Configuration
+
 #pragma region IRB Adapter Code
 
 #include <cstdbool>
@@ -67,27 +68,8 @@ playVexcodeSound(const char* soundName)
 
 #include <algorithm>
 #include <array>
-#include <iostream>
-#include <span>
-#include <string>
-#include <utility>
-#include <vector>
 
 namespace e10 {
-// Camera indicies
-constexpr auto x_center_low = 0;
-constexpr auto x_center_hi = 1;
-constexpr auto y_center_low = 2;
-constexpr auto y_center_hi = 3;
-constexpr auto block_width_low = 4;
-constexpr auto block_width_hi = 5;
-constexpr auto block_height_low = 6;
-constexpr auto block_height_hi = 7;
-
-// Photo diode indicies
-constexpr auto diode_number = 0;
-constexpr auto intensity_value = 1;
-
 class adapter
 {
 public:
@@ -97,7 +79,7 @@ public:
     uint8_t intensity = 0;
   };
 
-  struct hi_freq_data
+  struct high_freq_data
   {
     uint8_t strongest_photo_diode = 0;
     uint8_t intensity = 0;
@@ -112,112 +94,174 @@ public:
   };
 
   adapter(uint8_t p_port)
+    : m_sampling_thread(sampling_thread, this)
+    , m_port(p_port)
   {
-    // make thread to run reads here
-    std::array<char, 12> port_buffer{};
-    snprintf(port_buffer.data(), port_buffer.size(), "/dev/port%u", p_port);
-    m_port_file = fopen(port_buffer.data(), "wb+");
-    if (m_port_file == NULL) {
-      printf("Failed opening port\n");
-    }
   }
 
-  low_freq_data get_low_freq_data()
-  {
-    std::array<uint8_t, 3> read_buffer{};
-
-    if (request_data('l', read_buffer)) {
-      return low_freq_data{
-        .strongest_photo_diode =
-          static_cast<uint8_t>(static_cast<int>(read_buffer[diode_number])),
-        .intensity =
-          static_cast<uint8_t>(static_cast<int>(read_buffer[intensity_value])),
-      };
-    }
-    return {};
-  }
-
-  hi_freq_data get_hi_freq_data()
-  {
-    std::array<uint8_t, 3> read_buffer{};
-
-    if (request_data('h', read_buffer)) {
-      return hi_freq_data{
-        .strongest_photo_diode =
-          static_cast<uint8_t>(read_buffer[diode_number]),
-        .intensity = static_cast<uint8_t>(read_buffer[intensity_value]),
-      };
-    }
-    return {};
-  }
-
-  camera_data get_cam_data()
-  {
-    std::array<uint8_t, 9> read_buffer{};
-
-    if (request_data('c', read_buffer)) {
-      return camera_data{
-        .x_center = static_cast<uint16_t>((read_buffer[x_center_hi] << 8) |
-                                          read_buffer[x_center_low]),
-        .y_center = static_cast<uint16_t>((read_buffer[y_center_hi] << 8) |
-                                          read_buffer[y_center_low]),
-        .width = static_cast<uint16_t>((read_buffer[block_width_hi] << 8) |
-                                       read_buffer[block_width_low]),
-        .height = static_cast<uint16_t>((read_buffer[block_height_hi] << 8) |
-                                        read_buffer[block_height_low]),
-      };
-    }
-    return {};
-  }
+  low_freq_data get_low_freq_data() { return m_cached_low; }
+  high_freq_data get_high_freq_data() { return m_cached_high; }
+  camera_data get_cam_data() { return m_cached_camera; }
 
 private:
-  bool request_data(char p_command, std::span<uint8_t> p_read_buffer)
+  template<size_t Length>
+  struct request_response
   {
-    bool success = true;
-    if (m_port_file == NULL) {
+    request_response(bool p_valid)
+      : valid(p_valid)
+    {
+    }
+    request_response() {}
+    std::array<uint8_t, Length> data{};
+    bool valid = false;
+  };
+
+  static int sampling_thread(void* p_args)
+  {
+    auto* self = static_cast<adapter*>(p_args);
+    self->sampling_thread_impl();
+    return 0;
+  }
+
+  int sampling_thread_impl()
+  {
+    FILE* port = nullptr;
+
+    while (port == nullptr) {
+      printf("Opening port %u\n", m_port);
+
+      // Clear everything and wait
+      m_cached_low = {};
+      m_cached_high = {};
+      m_cached_camera = {};
+
+      // Attempt to open port ==================================================
+
+      constexpr char const* path_template = "/dev/port%u";
+      // Add 3 for the 3 letters of 256 (max 8-bit value) and + 1 for null
+      // character.
+      constexpr size_t buffer_length = sizeof(path_template) + 3 + 1;
+      std::array<char, 13> port_path{};
+      snprintf(port_path.data(), port_path.size(), path_template, m_port);
+      port = fopen(port_path.data(), "wb+");
+
+      if (port == nullptr) {
+        printf("Opening port %u FAILED!\n", m_port);
+        vex::wait(1, seconds);
+      }
+    }
+
+    while (true) {
+      // Camera indicies
+      static constexpr auto x_center_low = 0;
+      static constexpr auto x_center_hi = 1;
+      static constexpr auto y_center_low = 2;
+      static constexpr auto y_center_hi = 3;
+      static constexpr auto block_width_low = 4;
+      static constexpr auto block_width_hi = 5;
+      static constexpr auto block_height_low = 6;
+      static constexpr auto block_height_hi = 7;
+
+      // Photo diode indicies
+      static constexpr auto diode_number = 0;
+      static constexpr auto intensity_value = 1;
+
+      // Max response size needed is 9 bytes
+      auto const low_buffer = request_data<3>(port, 'l');
+      if (low_buffer.valid) {
+        m_cached_low.strongest_photo_diode = low_buffer.data[diode_number];
+        m_cached_low.intensity = low_buffer.data[intensity_value];
+      }
+
+      auto const high_buffer = request_data<3>(port, 'h');
+      if (high_buffer.valid) {
+        m_cached_high.strongest_photo_diode = high_buffer.data[diode_number];
+        m_cached_high.intensity = high_buffer.data[intensity_value];
+      };
+
+      auto const cam = request_data<9>(port, 'c');
+      if (cam.valid) {
+        auto const x = (cam.data[x_center_hi] << 8) | cam.data[x_center_low];
+        m_cached_camera.x_center = static_cast<uint16_t>(x);
+
+        auto const y = (cam.data[y_center_hi] << 8) | cam.data[y_center_low];
+        m_cached_camera.y_center = static_cast<uint16_t>(y);
+
+        auto const width =
+          (cam.data[block_width_hi] << 8) | cam.data[block_width_low];
+        m_cached_camera.width = static_cast<uint16_t>(width);
+
+        auto const height =
+          (cam.data[block_height_hi] << 8) | cam.data[block_height_low];
+        m_cached_camera.height = static_cast<uint16_t>(height);
+      }
+      this_thread::sleep_for(25); // wait 10ms
+    }
+    return 0;
+  }
+
+  template<size_t ArraySize>
+  static request_response<ArraySize> request_data(FILE* p_port, char p_command)
+  {
+    static_assert(ArraySize >= 3,
+                  "ArraySize must be equal to or greater than 3.");
+    request_response<ArraySize> response{};
+
+    if (p_port == NULL) {
       printf("Port not open...\n");
       return false;
     }
 
-    auto bytes_written = fwrite(&p_command, sizeof(p_command), 1, m_port_file);
+    auto const bytes_written = fwrite(&p_command, sizeof(p_command), 1, p_port);
     if (bytes_written != sizeof(p_command)) {
       printf("Failed write to port, %zu bytes written.\n", bytes_written);
       return false;
     }
 
-    // Wait 10ms for data
-    vex::this_thread::sleep_for(10);
+    auto iterator = response.data.begin();
+    auto end = response.data.end();
 
-    // rudimentary "timeout"
-    int attempts = 0;
-    auto read_span = p_read_buffer;
-    while (not read_span.empty()) {
-      auto bytes_read = fread(read_span.data(),
-                              sizeof(read_span[0]),
-                              read_span.size_bytes(),
-                              m_port_file);
-      read_span.subspan(bytes_read);
-
-      if (++attempts >= 15) {
-        printf("Failed read from port, %zu bytes read:  ", bytes_read);
-        // TODO(kammce): print out the bytes
-        return false;
-      }
+    for (int attempts = 0; attempts < 50 and iterator != end; attempts++) {
+      this_thread::sleep_for(1);
+      auto const read_length = std::distance(iterator, end);
+      auto const bytes_read = fread(iterator, 1, read_length, p_port);
+      iterator += bytes_read;
     }
 
-    auto const body = p_read_buffer.first(p_read_buffer.size() - 1);
-    uint8_t const checksum = std::ranges::reduce(body, uint8_t{});
+    if (iterator != end) {
+      auto start = response.data.begin();
+      auto const bytes_remaining = std::distance(start, iterator);
+      printf("Failed read from port! %u bytes read. Contents: [",
+             bytes_remaining);
+      for (; start != iterator + 1; start++) {
+        printf("0x%02X, ", *start);
+      }
+      printf("]\n");
+      return false;
+    }
 
-    if (checksum == static_cast<uint8_t>(p_read_buffer.back())) {
+    // Calculate Checksum: Use `.end() - 2` so we can be two characters from the
+    // last
+    uint8_t checksum = 0;
+    for (auto start = response.data.begin(); start != (response.data.end() - 2);
+         start++) {
+      checksum += *start;
+    }
+
+    if (checksum != response.data.back()) {
       printf("Checksum mismatch...\n");
       return false;
     }
 
-    return true;
+    return response;
   }
-  FILE* m_port_file;
-};
 
+  vex::thread m_sampling_thread;
+  low_freq_data m_cached_low;
+  high_freq_data m_cached_high;
+  camera_data m_cached_camera;
+  uint8_t m_port;
+};
 } // namespace e10
 
 #pragma endregion IRB Adapter Code
@@ -271,27 +315,24 @@ int
 main()
 {
   Brain.Timer.clear();
-  int const port_number = 1;
-  e10::adapter board(port_number);
-  uint8_t threshold = 5;
-  uint8_t max_power = 40;
 
+  // Change this number to the port number you are using on your VEX controller
+  static constexpr int port_number = 1;
+  e10::adapter board(port_number);
+
+  // TODO(kammce): replace with calls to `pressing()`
   front_bumper.pressed(switch_pressed);
 
-  while (1) {
+  static constexpr uint8_t threshold = 5;
+  static constexpr uint8_t max_power = 40;
+  static constexpr size_t print_skip_count = 200;
+  int print_skip = 0;
+
+  while (true) {
     switch (state) {
       case mission_state::find_beacon: {
         auto low_freq_data = board.get_low_freq_data();
         int direction = low_freq_data.strongest_photo_diode;
-
-        // write to screen
-        Brain.Screen.clearScreen();
-        Brain.Screen.printAt(10,
-                             20,
-                             "Low Frequency Beacon: PD %u: %u ",
-                             low_freq_data.strongest_photo_diode,
-                             low_freq_data.intensity);
-        Brain.Screen.printAt(10, 40, "Camera Data: Waiting...");
 
         // spin in place if nothing detected
         if (low_freq_data.intensity < threshold) {
@@ -337,20 +378,10 @@ main()
         right_motor.stop();
         left_motor.stop();
         state = mission_state::find_object;
-        max_power = 25;
         break;
       }
       case mission_state::find_object: {
         auto cam_data = board.get_cam_data();
-        Brain.Screen.clearScreen();
-        Brain.Screen.printAt(10, 20, "Low Frequency Beacon: Collected");
-        Brain.Screen.printAt(10,
-                             40,
-                             "Camera Data: %d, %u (%u X %u)",
-                             cam_data.x_center,
-                             cam_data.y_center,
-                             cam_data.width,
-                             cam_data.height);
         printf("Camera Data: X:%u Y:%u    %ux%u\n",
                cam_data.x_center,
                cam_data.y_center,
@@ -401,5 +432,29 @@ main()
       default:
         break;
     }
+    this_thread::sleep_for(1);
+
+    if (print_skip % print_skip_count == 0) {
+      // write to screen
+      Brain.Screen.clearScreen();
+
+      auto low_freq_data = board.get_low_freq_data();
+      auto cam_data = board.get_cam_data();
+      Brain.Screen.printAt(
+        10, 20, "Print count: %d", print_skip / print_skip_count);
+      Brain.Screen.printAt(10,
+                           40,
+                           "Low Frequency Beacon: PD %u: %u %d",
+                           low_freq_data.strongest_photo_diode,
+                           low_freq_data.intensity);
+      Brain.Screen.printAt(10,
+                           60,
+                           "Camera Data: %d, %u (%u X %u)",
+                           cam_data.x_center,
+                           cam_data.y_center,
+                           cam_data.width,
+                           cam_data.height);
+    }
+    print_skip++;
   }
 }
