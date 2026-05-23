@@ -294,6 +294,7 @@ private:
 
 #pragma endregion VEXcode Generated Robot Configuration
 
+// TODO(kammce): update the VEX comments here
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*    Module:       main.cpp                                                  */
