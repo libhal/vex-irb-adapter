@@ -281,10 +281,10 @@ vex::limit front_bumper = limit(Brain.ThreeWirePort.A);
 
 enum class mission_state
 {
-  find_beacon,
+  goto_beacon,
   turn_off_beacon,
   backup,
-  find_object,
+  goto_object,
   escape_arena,
   mission_complete,
 };
@@ -297,7 +297,7 @@ main()
   // Change this number to the port number you are using on your VEX controller
   static constexpr int port_number = 1;
   e10::adapter board(port_number);
-  mission_state state = mission_state::find_beacon;
+  mission_state state = mission_state::goto_beacon;
 
   // TODO(kammce): replace with calls to `pressing()`
   front_bumper.pressed(switch_pressed);
@@ -307,7 +307,7 @@ main()
 
   while (true) {
     switch (state) {
-      case mission_state::find_beacon: {
+      case mission_state::goto_beacon: {
         auto low_freq_data = board.get_low_ir();
         int direction = low_freq_data.strongest_photo_diode;
 
@@ -366,10 +366,10 @@ main()
         // stop again
         right_motor.stop();
         left_motor.stop();
-        state = mission_state::find_object;
+        state = mission_state::goto_object;
         break;
       }
-      case mission_state::find_object: {
+      case mission_state::goto_object: {
         auto cam_data = board.get_cam_data();
         Brain.Screen.clearScreen();
         Brain.Screen.printAt(10, 20, "Low Frequency Beacon: Collected");

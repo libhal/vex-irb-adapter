@@ -246,7 +246,7 @@ private:
       this_thread::sleep_for(1);
       // auto const read_length = std::distance(iterator, end);
       auto const bytes_read = fread(/* address = */ iterator,
-                                    /* element_size = */ 1,
+                                    /* element_size = */ sizeof(*iterator),
                                     /* element_count = */ 1,
                                     /* file_stream = */ m_port_file);
       // Advance the iterator `bytes_read` number of elements (bytes)
@@ -317,10 +317,10 @@ vex::limit front_bumper = limit(Brain.ThreeWirePort.A);
 
 enum class mission_state
 {
-  find_beacon,
+  goto_beacon,
   turn_off_beacon,
   backup,
-  find_object,
+  goto_object,
   escape_arena,
   mission_complete,
 };
@@ -341,11 +341,11 @@ main()
   static constexpr size_t print_skip_count = 400;
   int print_skip = 0;
 
-  mission_state state = mission_state::find_beacon;
+  mission_state state = mission_state::goto_beacon;
 
   while (true) {
     switch (state) {
-      case mission_state::find_beacon: {
+      case mission_state::goto_beacon: {
         auto const infrared = board.get_low_ir();
         int const direction = infrared.direction;
 
@@ -384,10 +384,10 @@ main()
       }
       case mission_state::backup: {
         // STUDENT NOTE: Replace line below with your own code...
-        state = mission_state::find_object;
+        state = mission_state::goto_object;
         break;
       }
-      case mission_state::find_object: {
+      case mission_state::goto_object: {
         auto const detected_object = board.get_detected_object();
         // If width (or height) is 0, then the object has not been detected,
         // then spin around to scan for the object.
@@ -401,22 +401,25 @@ main()
         // Check if the front bumper has been pressed. If so, then we must have
         // reached the object.
         if (front_bumper.pressing()) {
-          state = mission_state::turn_off_beacon;
+          state = mission_state::escape_arena;
         }
         break;
       }
       case mission_state::escape_arena: {
-        // STUDENT NOTE: Replace line below with your own code...
+        // STUDENT NOTE: Suggestion: replace code below put a button on the
+        // robot so when it leaves the arena, you can press it to stop it and
+        // move the state to "mission_complete"
         state = mission_state::mission_complete;
         break;
       }
       case mission_state::mission_complete: {
+
         right_motor.stop();
         left_motor.stop();
         float const timer_seconds = Brain.Timer.time(seconds);
         Brain.Screen.clearScreen();
         Brain.Screen.printAt(
-          10, 80, "Mission Complete in %.3f seconds!", timer_seconds);
+          10, 100, "Mission Complete in %.3f seconds!", timer_seconds);
         this_thread::sleep_for(15000);
         Brain.programStop();
       }
@@ -425,19 +428,25 @@ main()
     }
 
     if (print_skip % print_skip_count == 0) {
-      auto const low_freq_data = board.get_low_ir();
+      auto const low_ir = board.get_low_ir();
+      auto const high_ir = board.get_high_ir();
       auto const detected_object = board.get_detected_object();
       auto const total_print_count = print_skip / print_skip_count;
-      Brain.Screen.clearScreen();
-      Brain.Screen.printAt(10, 20, "Print count: %d", total_print_count);
+      Brain.Screen.printAt(10, 20, " Print count | %d", total_print_count);
       Brain.Screen.printAt(10,
                            40,
-                           "Low Frequency Beacon: PD %u: %u %d",
-                           low_freq_data.direction,
-                           low_freq_data.intensity);
+                           " 1kHz Beacon | dir: %u, intensity: %02u",
+                           low_ir.direction,
+                           low_ir.intensity);
+
       Brain.Screen.printAt(10,
                            60,
-                           "Camera Data: %d, %u (%u X %u)",
+                           "10kHz Beacon | dir: %u, intensity: %02u",
+                           high_ir.direction,
+                           high_ir.intensity);
+      Brain.Screen.printAt(10,
+                           80,
+                           " Camera Data | (x: %d, y: %u) (%02u X %02u)  ",
                            detected_object.x_center,
                            detected_object.y_center,
                            detected_object.width,
