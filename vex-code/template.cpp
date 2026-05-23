@@ -66,26 +66,20 @@ playVexcodeSound(const char* soundName)
 #include <cstdio>
 #include <cstdlib>
 
-#include <algorithm>
 #include <array>
+#include <iterator>
 
 namespace e10 {
 class adapter
 {
 public:
-  struct low_freq_data
+  struct ir_measurement
   {
     uint8_t direction = 0;
     uint8_t intensity = 0;
   };
 
-  struct high_freq_data
-  {
-    uint8_t direction = 0;
-    uint8_t intensity = 0;
-  };
-
-  struct camera_data
+  struct detected_object
   {
     uint16_t x_center = 0;
     uint16_t y_center = 0;
@@ -94,14 +88,14 @@ public:
   };
 
   adapter(uint8_t p_port)
-    : m_port(p_port)
-    , m_sampling_thread(sampling_thread, this)
+    : m_sampling_thread(sampling_thread, this)
+    , m_port(p_port)
   {
   }
 
-  low_freq_data get_low_freq_data() { return m_cached_low; }
-  high_freq_data get_high_freq_data() { return m_cached_high; }
-  camera_data get_detected_object() { return m_cached_camera; }
+  ir_measurement get_low_ir() { return m_cached_low; }
+  ir_measurement get_high_ir() { return m_cached_high; }
+  detected_object get_detected_object() { return m_cached_camera; }
 
   ~adapter() { fclose(m_port_file); }
 
@@ -152,7 +146,7 @@ private:
     }
 
     while (true) {
-      // Camera indicies
+      // Object recognition byte indicies
       static constexpr auto x_center_low = 0;
       static constexpr auto x_center_hi = 1;
       static constexpr auto y_center_low = 2;
@@ -162,45 +156,66 @@ private:
       static constexpr auto block_height_low = 6;
       static constexpr auto block_height_hi = 7;
 
-      // Photo diode indicies
+      // Photo diode command byte indicies
       static constexpr auto diode_number = 0;
       static constexpr auto intensity_value = 1;
 
+      // --- High Buffer Processing ---
       auto const high_buffer = request_data<3>('h');
       if (high_buffer.valid) {
-        m_cached_high.direction = high_buffer.data[diode_number];
-        m_cached_high.intensity = high_buffer.data[intensity_value];
-      };
+        ir_measurement tmp_high{};
+        tmp_high.direction = high_buffer.data[diode_number];
+        tmp_high.intensity = high_buffer.data[intensity_value];
+        m_cached_high = tmp_high;
+      }
+      this_thread::sleep_for(1);
 
-      this_thread::sleep_for(10);
-
+      // --- Low Buffer Processing ---
       auto const low_buffer = request_data<3>('l');
       if (low_buffer.valid) {
-        m_cached_low.direction = low_buffer.data[diode_number];
-        m_cached_low.intensity = low_buffer.data[intensity_value];
+        ir_measurement tmp_low;
+        tmp_low.direction = low_buffer.data[diode_number];
+        tmp_low.intensity = low_buffer.data[intensity_value];
+        m_cached_low = tmp_low;
       }
+      this_thread::sleep_for(1);
 
-      this_thread::sleep_for(10);
-
+      // --- Camera Buffer Processing ---
       auto const cam = request_data<9>('c');
       if (cam.valid) {
-        auto const x = (cam.data[x_center_hi] << 8) | cam.data[x_center_low];
-        m_cached_camera.x_center = static_cast<uint16_t>(x);
-
-        auto const y = (cam.data[y_center_hi] << 8) | cam.data[y_center_low];
-        m_cached_camera.y_center = static_cast<uint16_t>(y);
-
-        auto const width =
+        detected_object tmp_cam{};
+        tmp_cam.x_center =
+          (cam.data[x_center_hi] << 8) | cam.data[x_center_low];
+        tmp_cam.y_center =
+          (cam.data[y_center_hi] << 8) | cam.data[y_center_low];
+        tmp_cam.width =
           (cam.data[block_width_hi] << 8) | cam.data[block_width_low];
-        m_cached_camera.width = static_cast<uint16_t>(width);
-
-        auto const height =
+        tmp_cam.height =
           (cam.data[block_height_hi] << 8) | cam.data[block_height_low];
-        m_cached_camera.height = static_cast<uint16_t>(height);
+        m_cached_camera = tmp_cam;
       }
-      this_thread::sleep_for(10);
+      this_thread::sleep_for(8);
     }
     return 0;
+  }
+
+  template<typename Iterator>
+  void print_failed_response(char p_command,
+                             Iterator p_begin,
+                             Iterator p_cursor,
+                             Iterator p_end)
+  {
+    auto const bytes_read = std::distance(p_begin, p_cursor - 1);
+    auto const bytes_remaining = std::distance(p_cursor, p_end);
+    printf("Command '%c' response failed! %u bytes read. %u bytes remaining \n",
+           p_command,
+           bytes_read,
+           bytes_remaining);
+    printf("    Contents: [");
+    for (auto index = p_begin; index != p_cursor + 1; index++) {
+      printf("0x%02X, ", *index);
+    }
+    printf("]\n");
   }
 
   template<size_t ArraySize>
@@ -223,75 +238,54 @@ private:
     }
 
     auto iterator = response.data.begin();
-    auto end = response.data.end();
-    auto back = response.data.end() - 1;
+    auto const end = response.data.end();
+    // The last byte of the response is the checksum
+    auto const response_checksum = response.data.end() - 1;
 
     for (int attempts = 0; attempts < 100 and iterator != end; attempts++) {
       this_thread::sleep_for(1);
       // auto const read_length = std::distance(iterator, end);
-      auto const bytes_read = fread(iterator, 1, 1, m_port_file);
+      auto const bytes_read = fread(/* address = */ iterator,
+                                    /* element_size = */ 1,
+                                    /* element_count = */ 1,
+                                    /* file_stream = */ m_port_file);
+      // Advance the iterator `bytes_read` number of elements (bytes)
       iterator += bytes_read;
     }
 
+    // Didn't reach the end of the response buffer
     if (std::distance(iterator, end) != 0) {
-      auto start = response.data.begin();
-      auto const bytes_read = std::distance(start, iterator - 1);
-      auto const bytes_remaining = std::distance(iterator, end);
-      printf(
-        "Command '%c' response failed! %u bytes read. %u bytes remaining \n",
-        p_command,
-        bytes_read,
-        bytes_remaining);
-      printf("    Contents: [");
-      for (; start != iterator + 1; start++) {
-        printf("0x%02X, ", *start);
-      }
-      printf("]\n");
+      auto const begin = response.data.begin();
+      print_failed_response(p_command, begin, iterator, end);
       return false;
     }
 
-    uint8_t checksum = 0;
-    for (auto start = response.data.begin(); start != back; start++) {
-      checksum += *start;
+    // Calculate the checksum
+    uint8_t calculated_checksum = 0;
+    for (auto index = response.data.begin(); index != response_checksum;
+         index++) {
+      calculated_checksum += *index;
     }
 
-    if (checksum != *back) {
-      auto start = response.data.begin();
-      auto const bytes_read = std::distance(start, iterator);
-      auto const bytes_remaining = std::distance(iterator, end);
-      printf("Checksum mismatch! Calculated = (%u), Received = (%u) ...\n",
-             checksum,
-             *back);
-      printf(
-        "Command '%c' response failed! %u bytes read. %u bytes remaining \n",
-        p_command,
-        bytes_read,
-        bytes_remaining);
-      printf("    Contents: [");
-      for (; start != iterator + 1; start++) {
-        printf("0x%02X, ", *start);
-      }
-      printf("]\n");
+    if (calculated_checksum != *response_checksum) {
+      auto const begin = response.data.begin();
+      printf("Bad Checksum! Calculated: 0x%02X, Received: 0x%02X\n",
+             calculated_checksum,
+             *response_checksum);
+      print_failed_response(p_command, begin, iterator, end);
       return false;
     }
 
-    printf("Command '%c' worked\n", p_command);
-    printf("    Contents: [");
-    for (auto start = response.data.begin(); start != response.data.end();
-         start++) {
-      printf("0x%02X, ", *start);
-    }
-    printf("]\n");
     response.valid = true;
     return response;
   }
 
-  uint8_t m_port;
   FILE* m_port_file = nullptr;
   vex::thread m_sampling_thread;
-  low_freq_data m_cached_low;
-  high_freq_data m_cached_high;
-  camera_data m_cached_camera;
+  detected_object m_cached_camera{};
+  ir_measurement m_cached_high{};
+  ir_measurement m_cached_low{};
+  uint8_t m_port{};
 };
 } // namespace e10
 
@@ -331,14 +325,12 @@ enum class mission_state
   mission_complete,
 };
 
-mission_state state = mission_state::find_beacon;
-
 int
 main()
 {
   Brain.Timer.clear();
 
-  // Change this number to the port number you are using on your VEX controller
+  // NOTE: Change port_number to the port the E10 Adapter is connected to
   static constexpr int port_number = 1;
   e10::adapter board(port_number);
 
@@ -349,13 +341,15 @@ main()
   static constexpr size_t print_skip_count = 400;
   int print_skip = 0;
 
+  mission_state state = mission_state::find_beacon;
+
   while (true) {
     switch (state) {
       case mission_state::find_beacon: {
-        auto const infrared = board.get_low_freq_data();
+        auto const infrared = board.get_low_ir();
         int const direction = infrared.direction;
 
-        // spin in place if nothing detected
+        // Spin in place if nothing detected
         if (infrared.intensity < threshold) {
           right_motor.spin(reverse, max_power / 2, rpm);
           left_motor.spin(forward, max_power / 2, rpm);
@@ -431,13 +425,11 @@ main()
     }
 
     if (print_skip % print_skip_count == 0) {
-      // write to screen
+      auto const low_freq_data = board.get_low_ir();
+      auto const detected_object = board.get_detected_object();
+      auto const total_print_count = print_skip / print_skip_count;
       Brain.Screen.clearScreen();
-
-      auto low_freq_data = board.get_low_freq_data();
-      auto detected_object = board.get_detected_object();
-      Brain.Screen.printAt(
-        10, 20, "Print count: %d", print_skip / print_skip_count);
+      Brain.Screen.printAt(10, 20, "Print count: %d", total_print_count);
       Brain.Screen.printAt(10,
                            40,
                            "Low Frequency Beacon: PD %u: %u %d",

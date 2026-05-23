@@ -73,7 +73,7 @@ namespace e10 {
 class adapter
 {
 public:
-  struct low_freq_data
+  struct ir_measurement
   {
     uint8_t strongest_photo_diode = 0;
     uint8_t intensity = 0;
@@ -85,7 +85,7 @@ public:
     uint8_t intensity = 0;
   };
 
-  struct camera_data
+  struct detected_object
   {
     uint16_t x_center = 0;
     uint16_t y_center = 0;
@@ -98,9 +98,9 @@ public:
   {
   }
 
-  low_freq_data get_low_freq_data() { return m_cached_low; }
-  high_freq_data get_high_freq_data() { return m_cached_high; }
-  camera_data get_cam_data() { return m_cached_camera; }
+  ir_measurement get_low_ir() { return m_cached_low; }
+  high_freq_data get_high_ir() { return m_cached_high; }
+  detected_object get_cam_data() { return m_cached_camera; }
 
 private:
   template<size_t Length>
@@ -246,9 +246,9 @@ private:
     return response;
   }
 
-  low_freq_data m_cached_low;
+  ir_measurement m_cached_low;
   high_freq_data m_cached_high;
-  camera_data m_cached_camera;
+  detected_object m_cached_camera;
   uint8_t m_port;
 };
 } // namespace e10
@@ -308,7 +308,7 @@ main()
   while (true) {
     switch (state) {
       case mission_state::find_beacon: {
-        auto low_freq_data = board.get_low_freq_data();
+        auto low_freq_data = board.get_low_ir();
         int direction = low_freq_data.strongest_photo_diode;
 
         // write to screen
