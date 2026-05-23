@@ -57,8 +57,6 @@ playVexcodeSound(const char* soundName)
   wait(5, msec);
 }
 
-#pragma endregion VEXcode Generated Robot Configuration
-
 #pragma region IRB Adapter Code
 
 #include <cstdbool>
@@ -161,27 +159,17 @@ private:
       static constexpr auto intensity_value = 1;
 
       // --- High Buffer Processing ---
-      auto const high_buffer = request_data<3>('h');
+      auto const high_buffer = request_data<sizeof(ir_measurement)>('h');
       if (high_buffer.valid) {
         ir_measurement tmp_high{};
         tmp_high.direction = high_buffer.data[diode_number];
         tmp_high.intensity = high_buffer.data[intensity_value];
         m_cached_high = tmp_high;
       }
-      this_thread::sleep_for(1);
-
-      // --- Low Buffer Processing ---
-      auto const low_buffer = request_data<3>('l');
-      if (low_buffer.valid) {
-        ir_measurement tmp_low;
-        tmp_low.direction = low_buffer.data[diode_number];
-        tmp_low.intensity = low_buffer.data[intensity_value];
-        m_cached_low = tmp_low;
-      }
-      this_thread::sleep_for(1);
+      this_thread::sleep_for(10);
 
       // --- Camera Buffer Processing ---
-      auto const cam = request_data<9>('c');
+      auto const cam = request_data<sizeof(detected_object)>('c');
       if (cam.valid) {
         detected_object tmp_cam{};
         tmp_cam.x_center =
@@ -194,7 +182,17 @@ private:
           (cam.data[block_height_hi] << 8) | cam.data[block_height_low];
         m_cached_camera = tmp_cam;
       }
-      this_thread::sleep_for(8);
+      this_thread::sleep_for(10);
+
+      // --- Low Buffer Processing ---
+      auto const low_buffer = request_data<sizeof(ir_measurement)>('l');
+      if (low_buffer.valid) {
+        ir_measurement tmp_low;
+        tmp_low.direction = low_buffer.data[diode_number];
+        tmp_low.intensity = low_buffer.data[intensity_value];
+        m_cached_low = tmp_low;
+      }
+      this_thread::sleep_for(10);
     }
     return 0;
   }
@@ -218,12 +216,12 @@ private:
     printf("]\n");
   }
 
-  template<size_t ArraySize>
-  request_response<ArraySize> request_data(char p_command)
+  template<size_t ObjectSize>
+  request_response<ObjectSize + 1> request_data(char p_command)
   {
-    static_assert(ArraySize >= 3,
-                  "ArraySize must be equal to or greater than 3.");
-    request_response<ArraySize> response{};
+    static_assert(ObjectSize >= 1,
+                  "ObjectSize must be equal to or greater than 1.");
+    request_response<ObjectSize + 1> response{};
 
     if (m_port_file == NULL) {
       printf("Port not open...\n");
@@ -242,12 +240,15 @@ private:
     // The last byte of the response is the checksum
     auto const response_checksum = response.data.end() - 1;
 
+    // Attempts cap is set to 100 after measuring (printing) the number of
+    // attempts needed to capture all bytes which came out to be between 81
+    // and 86.
     for (int attempts = 0; attempts < 100 and iterator != end; attempts++) {
       this_thread::sleep_for(1);
-      // auto const read_length = std::distance(iterator, end);
+      auto const read_length = std::distance(iterator, end);
       auto const bytes_read = fread(/* address = */ iterator,
                                     /* element_size = */ sizeof(*iterator),
-                                    /* element_count = */ 1,
+                                    /* element_count = */ read_length,
                                     /* file_stream = */ m_port_file);
       // Advance the iterator `bytes_read` number of elements (bytes)
       iterator += bytes_read;
@@ -290,6 +291,8 @@ private:
 } // namespace e10
 
 #pragma endregion IRB Adapter Code
+
+#pragma endregion VEXcode Generated Robot Configuration
 
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
@@ -413,7 +416,6 @@ main()
         break;
       }
       case mission_state::mission_complete: {
-
         right_motor.stop();
         left_motor.stop();
         float const timer_seconds = Brain.Timer.time(seconds);
@@ -435,18 +437,17 @@ main()
       Brain.Screen.printAt(10, 20, " Print count | %d", total_print_count);
       Brain.Screen.printAt(10,
                            40,
-                           " 1kHz Beacon | dir: %u, intensity: %02u",
+                           " 1kHz Beacon | dir: %u, intensity: %03u",
                            low_ir.direction,
                            low_ir.intensity);
-
       Brain.Screen.printAt(10,
                            60,
-                           "10kHz Beacon | dir: %u, intensity: %02u",
+                           "10kHz Beacon | dir: %u, intensity: %03u",
                            high_ir.direction,
                            high_ir.intensity);
       Brain.Screen.printAt(10,
                            80,
-                           " Camera Data | (x: %d, y: %u) (%02u X %02u)  ",
+                           " Camera Data | (x: %03u, y: %03u) (%03u X %03u)  ",
                            detected_object.x_center,
                            detected_object.y_center,
                            detected_object.width,
