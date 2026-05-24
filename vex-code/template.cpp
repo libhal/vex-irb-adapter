@@ -288,21 +288,22 @@ private:
   ir_measurement m_cached_low{};
   uint8_t m_port{};
 };
+// A simple helper function to keep values within a range
+template<typename T>
+T
+clamp(T value, T min_val, T max_val)
+{
+  if (value < min_val)
+    return min_val;
+  if (value > max_val)
+    return max_val;
+  return value;
+}
 } // namespace e10
 
 #pragma endregion IRB Adapter Code
 
 #pragma endregion VEXcode Generated Robot Configuration
-
-// TODO(kammce): update the VEX comments here
-/*----------------------------------------------------------------------------*/
-/*                                                                            */
-/*    Module:       main.cpp                                                  */
-/*    Author:       {author}                                                  */
-/*    Created:      {date}                                                    */
-/*    Description:  V5 project                                                */
-/*                                                                            */
-/*----------------------------------------------------------------------------*/
 
 // Include the V5 Library
 #include "vex.h"
@@ -310,11 +311,14 @@ private:
 // Allows for easier use of the VEX Library
 using namespace vex;
 
+// Counters to reduce how fast the screen is updated
+static constexpr size_t print_skip_count = 400;
+int print_skip = 0;
+
 // Devices added with codev5.vex.com GUI are defined above in the
 // VEXcode Generated Robot Configuration region in the
-// "Robot configuration code" section
-
-// devices can also be defined manually as done here
+// "Robot configuration code" section. Devices can also be defined
+// manually as seen below.
 vex::motor right_motor = motor(PORT20, ratio18_1, false);
 vex::motor left_motor = motor(PORT10, ratio18_1, true);
 vex::limit front_bumper = limit(Brain.ThreeWirePort.A);
@@ -334,16 +338,15 @@ main()
 {
   Brain.Timer.clear();
 
-  // NOTE: Change port_number to the port the E10 Adapter is connected to
+  // NOTE: Change port_number to the port on the VEX Brain the E10 Adapter is
+  // connected to.
   static constexpr int port_number = 1;
   e10::adapter board(port_number);
 
   printf("Starting GOTO Beacon!\n");
 
   static constexpr uint8_t threshold = 5;
-  static constexpr uint8_t max_power = 40;
-  static constexpr size_t print_skip_count = 400;
-  int print_skip = 0;
+  static constexpr float forward_rpm = 20;
 
   mission_state state = mission_state::goto_beacon;
 
@@ -351,34 +354,51 @@ main()
     switch (state) {
       case mission_state::goto_beacon: {
         auto const infrared = board.get_low_ir();
-        int const direction = infrared.direction;
+        float const direction = infrared.direction;
 
-        // Spin in place if nothing detected
-        if (infrared.intensity < threshold) {
-          right_motor.spin(reverse, max_power / 2, rpm);
-          left_motor.spin(forward, max_power / 2, rpm);
-        }
-        // Go forward
-        else if (direction == 3 || direction == 4) {
-          right_motor.spin(forward, max_power, rpm);
-          left_motor.spin(forward, max_power, rpm);
-        }
-        // Go right
-        else if (direction < 3) {
-          right_motor.spin(forward, max_power * (direction / 3), rpm);
-          left_motor.spin(forward, max_power, rpm);
-        }
-        // Go left
-        else if (direction > 4) {
-          right_motor.spin(forward, max_power, rpm);
-          left_motor.spin(forward, max_power * ((7 - direction) / 3), rpm);
-        }
-
-        // Check if the front bumper has been pressed. If so, then we must have
-        // reached the beacon.
+        // 1. Check bumper
         if (front_bumper.pressing()) {
           state = mission_state::turn_off_beacon;
+          break;
         }
+
+        // 2. Spin in place if nothing detected
+        if (infrared.intensity < threshold) {
+          right_motor.spin(reverse, forward_rpm, rpm);
+          left_motor.spin(forward, forward_rpm, rpm);
+          break;
+        }
+
+        // 3. Calculate error
+
+        // Half way between 3 and 4
+        constexpr float center_target = 3.5f;
+        // turn_sensitivity controls how aggressively the robot turns when it
+        // detects a strong side diode
+        constexpr float turn_sensitivity = 0.5f;
+        // We map the discrete direction to an error relative to the center of 3
+        // & 4. If direction is 3 or 4, error will be -0.5 or +0.5, very turn.
+        // If direction is 1, error will be -2.5, large turn.
+        float const error = direction - center_target;
+
+        // 4. Tank steering calculation (differential power)
+        // We calculate a "steering offset" that shifts power between wheels.
+        float const steer_offset = error * (turn_sensitivity * forward_rpm);
+
+        // Left motor gets the base power PLUS the offset
+        // Right motor gets the base power MINUS the offset
+        float left_rpm = forward_rpm + steer_offset;
+        float right_rpm = forward_rpm - steer_offset;
+
+        // 5. Safety clamping
+        // Ensure power stays within [0, forward_rpm] to prevent reverse or
+        // over-voltage
+        left_rpm = e10::clamp(left_rpm, 0.0f, forward_rpm);
+        right_rpm = e10::clamp(right_rpm, 0.0f, forward_rpm);
+
+        // 6. Execute
+        right_motor.spin(reverse, right_rpm, rpm);
+        left_motor.spin(forward, left_rpm, rpm);
         break;
       }
       case mission_state::turn_off_beacon: {
