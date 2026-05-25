@@ -1,256 +1,257 @@
-# Vex IRB Adapter
+# 🤖 SJSU E10 Robot Lab — VEX5 Adapter
 
-[![✅ Firmware Build](https://github.com/libhal/vex-irb-adapter/actions/workflows/build.yml/badge.svg)](https://github.com/libhal/vex-irb-adapter/actions/workflows/build.yml)
+## 📖 Table of Contents
 
-This project is an adapter for the SJSU E10 Infrared Receiver Board to allow
-communication with Vex 5 brain through use of a RS485 tranceiver and an RJ11
-port (commonly called a smart port on Vex side). The adaptor has a QWIIC
-connector which is used to communicate with the
-[HuskyLens AI camera](https://www.dfrobot.com/product-1922.html).
+- [🤖 SJSU E10 Robot Lab — VEX5 Adapter](#-sjsu-e10-robot-lab--vex5-adapter)
+  - [📖 Table of Contents](#-table-of-contents)
+  - [🔍 What Is This?](#-what-is-this)
+  - [📦 Getting Your Files](#-getting-your-files)
+  - [💻 Writing \& Uploading Code](#-writing--uploading-code)
+    - [Option A — CodeV5 by VEX *(Recommended for beginners)*](#option-a--codev5-by-vex-recommended-for-beginners)
+    - [Option B — Visual Studio Code *(For those who want more control)*](#option-b--visual-studio-code-for-those-who-want-more-control)
+  - [📡 Sensor API Reference](#-sensor-api-reference)
+    - [Setup](#setup)
+    - [IR Beacon — Low Frequency (1 kHz)](#ir-beacon--low-frequency-1-khz)
+    - [IR Beacon — High Frequency (10 kHz)](#ir-beacon--high-frequency-10-khz)
+    - [AI Camera](#ai-camera)
+    - [Utility: Clamp](#utility-clamp)
+  - [🆘 Need Help?](#-need-help)
 
-The PCB design is open source and can be found on
-[OSHWLab](https://oshwlab.com/libhal/vex-adapter). The power regulator is
-purchased from [Pololu](https://www.pololu.com/product/5592) due to great value
-and reliability. To enclose the adaptor and make it easier to use we designed a
-[3D printed enclosure on OnShape](https://cad.onshape.com/documents/ee69ea771b3426ac97776444/w/45ac0aa7c9bd20a1984d74b6/e/4c369e0476760c7468856e8b?renderMode=0&uiState=68d6b1c8a8c68f57f9c83bdb) with heated inserts to allow quick assembly and disassembly.
+---
 
-The code in this repo contains the firmware for the adapter, as well as an example
-and a template to be used on the Vex located in the `/vex-code/` folder. The files in the vex-code
-folder are to be used in the [Vex Web Editor](https://codev5.vex.com/) or in VS Code with the
-[VEX extension](https://www.vexrobotics.com/vexcode/vscode-extension).
+## 🔍 What Is This?
 
-## Getting Started (Writing Code for Vex)
+This project gives your VEX V5 robot the ability to:
 
-To get access to the starter files on your computer you can download everything
-by clicking the Green `🟩 Code <>` drop down button on the top of the page, and
-navigate to the `Download Zip` button to download a zip of this project.
+- 📡 **Detect IR beacons** — sense direction and strength of 1 kHz
+  or 10 kHz infrared signal
+- 👁️ **See with AI** — locate and track objects using the
+  HuskyLens AI camera
 
-### Using CodeV5 by VEX (RECOMMENDED)
+The **E10 Adapter** board plugs into the E10 IRB sensor board on
+one side and your VEX V5 Brain's smart port on the other. The
+firmware and starter code in this repo do the heavy lifting so you
+can focus on writing your robot's logic.
 
-> [!IMPORTANT]
-> To use this tool, you **MUST** use a Chrome based browser:
+---
+
+## 📦 Getting Your Files
+
+You don't need a GitHub account to download the starter code.
+
+1. Click the green **`<> Code`** button near the top of this page
+2. Select **`Download ZIP`**
+3. Unzip the folder somewhere easy to find (like your Desktop)
+
+> [!TIP]
+> **What is GitHub?** GitHub is a website where code is stored and shared.
+> Think of it like Google Drive, but designed for software projects.
+> You can always come back here to find the current version of the starter
+> files.
+
+---
+
+## 💻 Writing & Uploading Code
+
+### Option A — CodeV5 by VEX *(Recommended for beginners)*
+
+> [!WARNING]
+> **Browser must support Web Serial!** Browsers that support this are listed
+> below:
 >
-> - Google Chrome
-> - Chromium
-> - Microsoft Edge
-> - Opera GX (supports WebSerial)
+> - Chrome
+> - Edge
+> - Chromium,
+> - Opera GX
+> - FireFox version 151
+>
+> See this page for an extended list of browser support here:
+> https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API#browser_compatibility
 
-Here is a link to the web based development software:
-[CodeV5 By Vex](https://codev5.vex.com/). To open the starter project navigate,
-from the web interface, select "File" then "Open" then navigate to the location
-where you installed this project and open the `vex-code/` folder and select `template.v5cpp`.
+1. Go to **[codev5.vex.com](https://codev5.vex.com/)** and create
+   a new `Text` project and select `C++` as the language.
+2. Go to this link **[`vex-code/starter.cpp`](vex-code/starter.cpp)**
+3. Press the "Copy Raw File" Button to copy the files contents.
 
-The downward facing arrow next to `#pragma region IRB Adapter Code` can be clicked to collapse the helper
-class for a cleaner view.
-![collapse](assets/collapse-arrow.jpg)
+![Copy file context](assets/copy_file_context.png)
 
-### Using Visual Studio Code (VSCode)
+4. Back in CodeV5, and paste the contents of the file and press the **Build**
+   button to test if the code builds.
 
-You can also use [Visual Studio Code](https://code.visualstudio.com/) to write
-software for the VEX5 Brain.
+![Build VEX5 Code Button](assets/vex5_build.png)
 
-- Install the [Vex Robotics](https://marketplace.visualstudio.com/items?itemName=VEXRobotics.vexcode) extension.
-- Open the Vex extension tab in VSCode and select "Import Project"
-- Find the downloaded project and select `template.v5cpp`.
+5. Done!
 
-## Requesting and Receiving Data With Helper Code
+> [!TIP]
+> Click the **▶ arrow** next to `#pragma region IRB Adapter Code`
+> to expand the helper library and its contents. Press it again to collapse it
+> and keep your workspace tidy.
 
-The template provides a helper class and functions to assist in asking for data
-from the adapter. They each return a struct containing the needed data and are
-further explained below.
+### Option B — Visual Studio Code *(For those who want more control)*
 
-#### Low Frequency IR Data
+1. Install [Visual Studio Code](https://code.visualstudio.com/)
+2. Install the [VEX Robotics extension]
+   (https://marketplace.visualstudio.com/items?itemName=VEXRobotics.vexcode)
+3. Open the VEX tab → **New Project** (select language `C++`)
+4. Open `vex-code/starter.cpp` from the downloaded folder, copy
+   all its contents, and paste them into your new project's main
+   file.
 
-Function Call:
+---
 
-```c++
-// defaults to 0 in case of bad read
-struct low_freq_data {
-  uint8_t strongest_photo_diode = 0; // from diode 0 to 7
-  uint8_t intensity = 0; // from 0 to 127
-};
+## 📡 Sensor API Reference
 
+The `e10::adapter` class gathers **IR beacon** and **AI camera**
+data from the E10 adapter board. Other sensors on your robot
+(motors, bumpers, etc.) are accessed the same way you always would
+in VEX.
+
+### Setup
+
+Declare your adapter once, near the top of your program. Replace
+`1` with whichever smart port your adapter is plugged into.
+
+```cpp
 const int port_number = 1;
-irb_adapter::adapter board(port_number);
-low_freq_data data = board.get_low_freq_data();
+e10::adapter sensor(port_number);
 ```
 
-#### High Frequency IR Data
+A background thread starts automatically and continuously reads
+data from the board — so your main loop never blocks waiting for
+sensor data.
 
-```c++
-// defaults to 0 in case of bad read
-struct hi_freq_data {
-  uint8_t strongest_photo_diode = 0; // from diode 0 to 7
-  uint8_t intensity = 0; // from 0 to 127
-};
+---
 
-const int port_number = 1;
-irb_adapter::adapter board(port_number); // using port 1 (can be changed)
-auto data = board.get_hi_freq_data();
+### IR Beacon — Low Frequency (1 kHz)
+
+Returns the direction and strength of the **1 kHz** infrared
+beacon signal.
+
+```cpp
+auto const measurement = sensor.get_low_ir();
 ```
 
-### AI Camera Data
+| Method                        | Returns | Description                                                            |
+| ----------------------------- | ------- | ---------------------------------------------------------------------- |
+| `measurement.direction()`     | `int`   | Strongest photo diode: **0** (left) to **7** (right). Center ≈ **3–4** |
+| `measurement.intensity()`     | `int`   | Signal strength **0–127**. Below **10** is usually noise               |
+| `measurement.min_direction()` | `int`   | Always **0**                                                           |
+| `measurement.max_direction()` | `int`   | Always **7**                                                           |
+| `measurement.min_intensity()` | `int`   | Always **0**                                                           |
+| `measurement.max_intensity()` | `int`   | Always **127**                                                         |
 
-```c++
-// defaults to 0 in case of bad read or no object detected
-struct camera_data {
-  uint16_t x_center = 0;
-  uint16_t y_center = 0;
-  uint16_t width = 0;
-  uint16_t height = 0;
-};
+**Example:**
 
-const int port_number = 1;
-irb_adapter::adapter board(port_number);
-auto data = board.get_cam_data();
-```
+```cpp
+auto const measurement = sensor.get_low_ir();
 
-### Example Data Usage
-
-```c++
-const int port_number = 1;
-irb_adapter::adapter board(port_number);
-
-while (true) {
-  auto data = board.get_hi_freq_data();
-  auto strongest_photo_diode_number = data.strongest_photo_diode;
-  // TODO: add print statement here.
+if (measurement.intensity() > 10) {
+    // Beacon is visible — check which side it's on
+    float center = measurement.max_direction() / 2.0f; // 3.5 = dead center
+    float error  = measurement.direction() - center;   // negative = left, positive = right
 }
 ```
 
-## Programming the Adapter
+---
 
-> [!NOTE]
-> If an adapter has been provided to you by an instructor of your class, such
-> as the E10 course at San Jose State University, then the device has been
-> pre-programmed and should work out of the box. If the device does not work
-> report it to your instructor and request a replacement if one exists.
+### IR Beacon — High Frequency (10 kHz)
 
-Adapters must be programmed in order to work properly. We **highly recommend**
-using the Web Flasher method for programming the devices as it is the most
-straight forward. The USB-C port to program the device is covered by the
-top case. To remove the top case cover, locate the three screws on the bottom
-of the case, and unscrewed them. The top should come off with the board still
-connected to the bottom of the case.
+Identical API to low frequency, but reads the **10 kHz** receiver.
 
-![](assets/case-bottom.jpg)
-![](assets/case-off.jpg)
+```cpp
+auto const measurement = sensor.get_high_ir();
+```
 
-### Programming Adapter Via Web Programmer (Recommended)
+| Method                        | Returns | Description                          |
+| ----------------------------- | ------- | ------------------------------------ |
+| `measurement.direction()`     | `int`   | Strongest photo diode index, **0–7** |
+| `measurement.intensity()`     | `int`   | Signal strength, **0–127**           |
+| `measurement.min_direction()` | `int`   | Always **0**                         |
+| `measurement.max_direction()` | `int`   | Always **7**                         |
+| `measurement.min_intensity()` | `int`   | Always **0**                         |
+| `measurement.max_intensity()` | `int`   | Always **127**                       |
 
-Programming using the Web Programmer requires a chrome based browser.
+**Example:**
 
-To program the device:
+```cpp
+auto const measurement = sensor.get_high_ir();
+int dir = measurement.direction();   // 0–7
+int str = measurement.intensity();   // 0–127
+```
 
-1. Connect adapter to computer via USB-C port and go to the [E10 adapter web programmer](https://libhal.github.io/vex-irb-adapter/).
-2. Click the connect and flash button and select the adapter in the pop-up.
-3. Wait until device is fully flashed, then you are free to disconnect device and use.
+---
+
+### AI Camera
+
+Returns bounding-box data for the object the HuskyLens camera is currently tracking.
 
 > [!TIP]
-> If you are unsure which device to choose, unplug and re-plug the adapter in
-> while the pop-up is open.
+> The camera frame is **640 × 480 pixels**. The origin `(0, 0)`
+> is the **top-left** corner.
 
-### Building and Flashing Manually
-
-You will need experience working with a terminal (also called command line) in
-order to build manually.
-
-Before getting started, if you haven't used libhal before, follow the
-[Getting Started](https://libhal.github.io/latest/getting_started/) guide.
-
-Clone or download the repo, then `cd` into the repo from a terminal.
-
-#### 📥 Setup
-
-Conan is the package manager used for this application. We typically install conan via `pipx`
-
-```bash
-pipx install conan>=2.16.0
+```cpp
+auto const object = sensor.get_detected_object();
 ```
 
-With conan installed, you can run the following setup:
+| Method                   | Returns | Description                                            |
+| ------------------------ | ------- | ------------------------------------------------------ |
+| `object.x_center()`      | `int`   | Horizontal center of the detected object, **0–639 px** |
+| `object.y_center()`      | `int`   | Vertical center of the detected object, **0–479 px**   |
+| `object.width()`         | `int`   | Bounding box width in pixels. **0 = nothing detected** |
+| `object.height()`        | `int`   | Bounding box height in pixels                          |
+| `object.camera_width()`  | `float` | Always **640**                                         |
+| `object.camera_height()` | `float` | Always **480**                                         |
 
-```bash
-conan config install https://github.com/libhal/conan-config2.git
-conan hal setup
+**Example:**
+
+```cpp
+auto const object = sensor.get_detected_object();
+
+if (object.width() == 0) {
+    // Nothing in view — spin and search
+} else {
+    // Something found — figure out where it is
+    float screen_center_x = object.camera_width() / 2.0f;  // 320
+    float error = object.x_center() - screen_center_x;     // negative = left of center
+}
 ```
 
-If both of those commands were successful, you are now ready to build the application
+> [!TIP]
+> A larger `width()` means the object is closer to the camera.
+> You can use this to estimate distance!
 
-#### 📦 Building Application
-
-```bash
-conan build adapter-firmware -pr:a hal/tc/gcc -pr:h hal/mcu/stm32f103c8
-```
-
-#### ⚡ Flashing device
-
-```bash
-stm32loader -e -w -v -B -p <device com> build/stm32f103c8/MinSizeRel/app.elf.bin
-```
-
-Replace `<device com>` with the path to your serial port for your system. On
-Windows its called `COM1`, `COM2`, ..., `COMN`. On UNIX based systems like Linux
-and Mac the serial devices are files located in `/dev/`, typicaly written as
-`/dev/ttyUSB0` or `/dev/ttyACM0` for Linux and `/dev/tty.serial______` in mac
-but the `______` is replaced with a serial number.
-
-## Advanced Details
-
-### Communication Protocol
-
-The Vex adapter communicates with the Husky AI Camera using a simple I2C protocol.
-The host (e.g., Vex code) sends a single byte to request data. The camera responds
-with a fixed-length byte stream containing sensor data and a checksum. The
-checksum  is computed as the **8-bit sum of all received bytes**
-(modulo 256). If the checksum does not match, the data is considered corrupted, and
-should be discarded by the VEX controller. The VEX control may make another request
-in order to get proper data.
-
-### Request: Low-Frequency IR Reading (`l`)
-
-Requests the photo diode with the highest intensity from low-frequency IR sensors.
-
-```mermaid
 ---
-title: "RS485 Response: 'l' (Low-Frequency IR) length: 3 bytes"
----
-packet
-0-7: "Photo diode number"
-8-15: "Intensity (0–127)"
-16-23: "Checksum (lower 8 bits of sum)"
+
+### Utility: Clamp
+
+A helper to keep a number within a safe range. Useful for preventing motor speeds from going out of bounds.
+
+```cpp
+e10::clamp(value, min_val, max_val)
 ```
 
-### Request: High-Frequency IR Reading (`h`)
+| Parameter   | Type | Description                              |
+| ----------- | ---- | ---------------------------------------- |
+| `value`     | `T`  | The number to constrain                  |
+| `min_val`   | `T`  | Minimum allowed value (inclusive)        |
+| `max_val`   | `T`  | Maximum allowed value (inclusive)        |
+| **Returns** | `T`  | `value`, clamped to `[min_val, max_val]` |
 
-Requests the photo diode with the highest intensity from high-frequency IR sensors.
+**Example:**
 
-```mermaid
----
-title: "RS485 Response: 'h' (High-Frequency IR) length: 3 bytes"
----
-packet
-0-7: "Photo diode number"
-8-15: "Intensity (0–127)"
-16-23: "Checksum (lower 8 bits of sum)"
+```cpp
+float speed = forward_rpm + steer_offset;
+speed = e10::clamp(speed, 0.0f, forward_rpm); // never goes negative or too fast
 ```
 
-### Request: Object Detection Data (`c`)
-
-Requests object detection data (center coordinate, bounding box width, bounding box height) from the camera.
-
-```mermaid
 ---
-title: "RS485 Response: 'c' (Object Detection) length: 9 bytes"
----
-packet
-0-7: "X Center Upper Bits"
-8-15: "X Center Lower Bits"
-16-23: "Y Center Upper Bits"
-24-31: "Y Center Lower Bits"
-32-39: "Width Upper Bits"
-40-47: "Width Lower Bits"
-48-55: "Height Upper Bits"
-56-63: "Height Lower Bits"
-64-71: "Checksum (lower 8 bits of sum)"
-```
+
+## 🆘 Need Help?
+
+| Issue                                | What to do                                                            |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| Code won't compile                   | Double-check you opened `template.v5cpp`, not a random file           |
+| Robot doesn't respond to the beacon  | Make sure `port_number` matches the physical smart port               |
+| `intensity()` is always low          | Check that the beacon is powered on and within range                  |
+| Camera always returns `width() == 0` | Re-train the HuskyLens on the target object using its onboard buttons |
+| Something else is broken             | Ask your lab instructor                                               |
