@@ -57,7 +57,7 @@ playVexcodeSound(const char* soundName)
   wait(5, msec);
 }
 
-#pragma region IRB Adapter Code
+#pragma region E10 IRB Adapter Code
 
 #include <cstdbool>
 #include <cstddef>
@@ -68,39 +68,260 @@ playVexcodeSound(const char* soundName)
 #include <iterator>
 
 namespace e10 {
+/**
+ * @brief Hardware abstraction adapter for the E10 IRB sensor board.
+ *
+ * Communicates with the E10 adapter over a VEX smart port serial connection.
+ * A background sampling thread continuously polls the board for IR beacon
+ * measurements and camera object detections, caching the latest values so
+ * callers can read them without blocking on I/O.
+ *
+ * Construct one instance per physical adapter and call `get_low_ir()`,
+ * `get_high_ir()`, or `get_detected_object()` from the main loop.
+ */
 class adapter
 {
 public:
+  /**
+   * @brief A single infrared beacon measurement from one of the IR receivers.
+   *
+   * Each measurement contains the direction of the strongest detected IR signal
+   * (which photo diode fired) and the intensity of that signal. The raw byte
+   * array is populated by the adapter's background thread via a serial request
+   * to the E10 board.
+   */
   struct ir_measurement
   {
-    /// Strongest infrared photo-diode direction from 0 to 7
-    uint8_t direction = 0;
-    // Strength of the strongest infrared photo-diode
-    uint8_t intensity = 0;
+    // Photo diode command byte indicies
+    static constexpr auto diode_number = 0;
+    static constexpr auto intensity_value = 1;
+    static constexpr auto max_intensity_mask = static_cast<uint8_t>(~(1U << 7));
+
+    /**
+     * @brief Minimum valid direction index (leftmost photo diode).
+     * @return uint8_t - always 0
+     */
+    constexpr uint8_t min_direction() const noexcept { return 0; }
+
+    /**
+     * @brief Maximum valid direction index (rightmost photo diode).
+     * @return uint8_t - always 7, giving 8 discrete directions (0–7)
+     */
+    constexpr uint8_t max_direction() const noexcept { return 7; }
+
+    /**
+     * @brief Minimum detectable signal intensity.
+     * @return uint8_t - always 0 (no signal)
+     */
+    constexpr uint8_t min_intensity() const noexcept { return 0; }
+
+    /**
+     * @brief Maximum detectable signal intensity.
+     * @return uint8_t - always 127
+     */
+    constexpr uint8_t max_intensity() const noexcept
+    {
+      return max_intensity_mask;
+    }
+
+    /**
+     * @brief Index of the photo diode that received the strongest IR signal.
+     *
+     * The value is in the range [min_direction(), max_direction()] where 0 is
+     * the leftmost diode and 7 is the rightmost. A value near the center (3–4)
+     * means the beacon is approximately straight ahead.
+     *
+     * @return uint8_t - direction index in [0, 7]
+     */
+    uint8_t direction() const noexcept { return raw[diode_number]; }
+
+    /**
+     * @brief Strength of the detected IR signal.
+     *
+     * The value is in the range [min_intensity(), max_intensity()]. Values
+     * below a small threshold (e.g. 10) typically indicate ambient IR noise
+     * rather than a real beacon signal.
+     *
+     * @return uint8_t - signal intensity in [0, 127]
+     */
+    uint8_t intensity() const noexcept
+    {
+      return raw[intensity_value] & max_intensity_mask;
+    }
+
+    /**
+     * @brief Equality comparison against another measurement.
+     * @param other - measurement to compare against
+     * @return true if every byte of the raw payload matches
+     */
+    bool operator==(const ir_measurement& other) const noexcept
+    {
+      return raw == other.raw;
+    }
+
+    std::array<uint8_t, 3> raw{};
   };
 
   /**
-   * @brief Representing the location of a detected object
+   * @brief Bounding-box data for a single object detected by the camera.
    *
-   * The camera width is 640 px and height is 480 px.
+   * The camera frame is 640 × 480 pixels. All coordinate and size values are
+   * in pixels, assembled from two-byte little-endian pairs in the raw payload.
+   * A `width()` of zero means no object was detected in the current frame.
    */
   struct detected_object
   {
-    uint16_t x_center = 0;
-    uint16_t y_center = 0;
-    uint16_t width = 0;
-    uint16_t height = 0;
+    // Object recognition byte indicies
+    static constexpr auto x_center_low = 0;
+    static constexpr auto x_center_hi = 1;
+    static constexpr auto y_center_low = 2;
+    static constexpr auto y_center_hi = 3;
+    static constexpr auto block_width_low = 4;
+    static constexpr auto block_width_hi = 5;
+    static constexpr auto block_height_low = 6;
+    static constexpr auto block_height_hi = 7;
+
+    /**
+     * @brief Horizontal resolution of the camera sensor in pixels.
+     * @return float - always 640
+     */
+    constexpr float camera_width() const noexcept { return 640; }
+
+    /**
+     * @brief Vertical resolution of the camera sensor in pixels.
+     * @return float - always 480
+     */
+    constexpr float camera_height() const noexcept { return 480; }
+
+    /**
+     * @brief Horizontal center of the detected object's bounding box.
+     * @return uint16_t - x coordinate in pixels, 0 to 639
+     */
+    uint16_t x_center() const noexcept
+    {
+      return (raw[x_center_hi] << 8) | raw[x_center_low];
+    }
+
+    /**
+     * @brief Vertical center of the detected object's bounding box.
+     * @return uint16_t - y coordinate in pixels, 0 to 479
+     */
+    uint16_t y_center() const noexcept
+    {
+      return (raw[y_center_hi] << 8) | raw[y_center_low];
+    }
+
+    /**
+     * @brief Width of the detected object's bounding box.
+     *
+     * A value of 0 indicates that no object was detected in the current frame.
+     *
+     * @return uint16_t - bounding box width in pixels
+     */
+    constexpr uint16_t width() const noexcept
+    {
+      return (raw[block_width_hi] << 8) | raw[block_width_low];
+    }
+
+    /**
+     * @brief Height of the detected object's bounding box.
+     * @return uint16_t - bounding box height in pixels
+     */
+    constexpr uint16_t height() const noexcept
+    {
+      return (raw[block_height_hi] << 8) | raw[block_height_low];
+    }
+
+    /**
+     * @brief Equality comparison against another detected_object.
+     * @param other - object to compare against
+     * @return true if every byte of the raw payload matches
+     */
+    bool operator==(const detected_object& other) const
+    {
+      return raw == other.raw;
+    }
+
+    using data_array = std::array<uint8_t, 9>;
+    data_array raw{};
   };
 
+  /**
+   * @brief Construct an adapter and begin background sampling.
+   *
+   * Launches an internal VEX thread that repeatedly polls the E10 board over
+   * the specified smart port. The thread retries the port open automatically
+   * if the initial open fails.
+   *
+   * @param p_port - VEX smart port number (1–21) the E10 adapter is plugged
+   * into
+   */
   adapter(uint8_t p_port)
     : m_sampling_thread(sampling_thread, this)
     , m_port(p_port)
   {
   }
 
-  ir_measurement get_low_ir() { return m_cached_low; }
-  ir_measurement get_high_ir() { return m_cached_high; }
-  detected_object get_detected_object() { return m_cached_camera; }
+  /**
+   * @brief Return the latest measurement from the 1 kHz IR receiver.
+   *
+   * Reads from a cache that is updated by the background sampling thread.
+   * The read is performed with a torn-write guard: the value is sampled twice
+   * and retried until both reads agree, ensuring a consistent snapshot even
+   * though the cache update is not atomic.
+   *
+   * @return ir_measurement - most recent low-frequency IR beacon measurement
+   */
+  ir_measurement get_low_ir()
+  {
+    ir_measurement result1, result2;
+    do {
+      result1 = m_cached_low;
+      result2 = m_cached_low;
+    } while (not(result1 == result2));
+
+    return result1;
+  }
+
+  /**
+   * @brief Return the latest measurement from the 10 kHz IR receiver.
+   *
+   * Reads from a cache that is updated by the background sampling thread.
+   * Uses the same torn-write guard as `get_low_ir()`.
+   *
+   * @return ir_measurement - most recent high-frequency IR beacon measurement
+   */
+  ir_measurement get_high_ir()
+  {
+    ir_measurement result1, result2;
+    do {
+      result1 = m_cached_high;
+      result2 = m_cached_high;
+    } while (not(result1 == result2));
+
+    return result1;
+  }
+
+  /**
+   * @brief Return the latest object detection result from the camera.
+   *
+   * Reads from a cache that is updated by the background sampling thread.
+   * Uses the same torn-write guard as `get_low_ir()`. Check
+   * `detected_object::width() == 0` to determine whether any object is
+   * currently visible.
+   *
+   * @return detected_object - most recent camera object detection
+   */
+  detected_object get_detected_object()
+  {
+    detected_object result1, result2;
+    do {
+      result1 = m_cached_camera;
+      result2 = m_cached_camera;
+    } while (not(result1 == result2));
+
+    return result1;
+  }
 
   ~adapter() { fclose(m_port_file); }
 
@@ -151,55 +372,46 @@ private:
     }
 
     while (true) {
-      // Object recognition byte indicies
-      static constexpr auto x_center_low = 0;
-      static constexpr auto x_center_hi = 1;
-      static constexpr auto y_center_low = 2;
-      static constexpr auto y_center_hi = 3;
-      static constexpr auto block_width_low = 4;
-      static constexpr auto block_width_hi = 5;
-      static constexpr auto block_height_low = 6;
-      static constexpr auto block_height_hi = 7;
-
-      // Photo diode command byte indicies
-      static constexpr auto diode_number = 0;
-      static constexpr auto intensity_value = 1;
-
+      // =======================================================================
       // --- High Buffer Processing ---
-      auto const high_buffer = request_data<sizeof(ir_measurement)>('h');
-      if (high_buffer.valid) {
-        ir_measurement tmp_high{};
-        tmp_high.direction = high_buffer.data[diode_number];
-        tmp_high.intensity = high_buffer.data[intensity_value] & 0x7F;
-        m_cached_high = tmp_high;
+      // =======================================================================
+      {
+        auto const buffer = request_data<sizeof(ir_measurement)>('h');
+        if (buffer.valid) {
+          // NOTE: this 3-byte assignment is not atomic. get_high_ir() must
+          // double check the result for information tearing before returning
+          // the value.
+          m_cached_high.raw = buffer.data;
+        }
+        this_thread::sleep_for(10);
       }
-      this_thread::sleep_for(10);
 
+      // =======================================================================
       // --- Camera Buffer Processing ---
-      auto const cam = request_data<sizeof(detected_object)>('c');
-      if (cam.valid) {
-        detected_object tmp_cam{};
-        tmp_cam.x_center =
-          (cam.data[x_center_hi] << 8) | cam.data[x_center_low];
-        tmp_cam.y_center =
-          (cam.data[y_center_hi] << 8) | cam.data[y_center_low];
-        tmp_cam.width =
-          (cam.data[block_width_hi] << 8) | cam.data[block_width_low];
-        tmp_cam.height =
-          (cam.data[block_height_hi] << 8) | cam.data[block_height_low];
-        m_cached_camera = tmp_cam;
+      // =======================================================================
+      {
+        auto const buffer = request_data<sizeof(detected_object)>('c');
+        if (buffer.valid) {
+          // NOTE: this 9-byte assignment is not atomic. get_detected_object()
+          // must double check the result for information tearing before
+          // returning the value.
+          m_cached_camera.raw = buffer.data;
+        }
+        this_thread::sleep_for(10);
       }
-      this_thread::sleep_for(10);
-
+      // =======================================================================
       // --- Low Buffer Processing ---
-      auto const low_buffer = request_data<sizeof(ir_measurement)>('l');
-      if (low_buffer.valid) {
-        ir_measurement tmp_low;
-        tmp_low.direction = low_buffer.data[diode_number];
-        tmp_low.intensity = low_buffer.data[intensity_value];
-        m_cached_low = tmp_low;
+      // =======================================================================
+      {
+        auto const buffer = request_data<sizeof(ir_measurement)>('l');
+        if (buffer.valid) {
+          // NOTE: this 3-byte assignment is not atomic. get_low_ir() must
+          // double check the result for information tearing before returning
+          // the value.
+          m_cached_low.raw = buffer.data;
+        }
+        this_thread::sleep_for(10);
       }
-      this_thread::sleep_for(10);
     }
     return 0;
   }
@@ -224,11 +436,11 @@ private:
   }
 
   template<size_t ObjectSize>
-  request_response<ObjectSize + 1> request_data(char p_command)
+  request_response<ObjectSize> request_data(char p_command)
   {
-    static_assert(ObjectSize >= 1,
+    static_assert(ObjectSize >= 2,
                   "ObjectSize must be equal to or greater than 1.");
-    request_response<ObjectSize + 1> response{};
+    request_response<ObjectSize> response{};
 
     if (m_port_file == NULL) {
       printf("Port not open...\n");
@@ -295,7 +507,18 @@ private:
   ir_measurement m_cached_low{};
   uint8_t m_port{};
 };
-// A simple helper function to keep values within a range
+/**
+ * @brief Constrain a value to the closed interval [min_val, max_val].
+ *
+ * If `value` is less than `min_val`, returns `min_val`. If `value` is greater
+ * than `max_val`, returns `max_val`. Otherwise returns `value` unchanged.
+ *
+ * @tparam T - any type that supports `<` comparison
+ * @param value - the value to clamp
+ * @param min_val - lower bound of the allowed range (inclusive)
+ * @param max_val - upper bound of the allowed range (inclusive)
+ * @return T - the clamped value in [min_val, max_val]
+ */
 template<typename T>
 T
 clamp(T value, T min_val, T max_val)
@@ -308,7 +531,7 @@ clamp(T value, T min_val, T max_val)
 }
 } // namespace e10
 
-#pragma endregion IRB Adapter Code
+#pragma endregion E10 IRB Adapter Code
 
 #pragma endregion VEXcode Generated Robot Configuration
 
@@ -326,17 +549,30 @@ int print_skip = 0;
 // VEXcode Generated Robot Configuration region in the
 // "Robot configuration code" section. Devices can also be defined
 // manually as seen below.
-vex::motor right_motor = motor(PORT20, ratio18_1, false);
-vex::motor left_motor = motor(PORT10, ratio18_1, true);
-vex::limit front_bumper = limit(Brain.ThreeWirePort.A);
+motor right_motor = motor(PORT20, ratio18_1, false);
+motor left_motor = motor(PORT10, ratio18_1, true);
+limit front_bumper = limit(Brain.ThreeWirePort.A);
 
+/**
+ * @brief Ordered phases of the robot's autonomous mission.
+ *
+ * The robot progresses through these states sequentially. Each state is
+ * handled by a case in the main control loop's switch statement.
+ */
 enum class mission_state
 {
+  /// Navigate toward the IR beacon using the low-frequency IR receiver.
   goto_beacon,
+  /// Deactivate the beacon once the front bumper confirms contact.
   turn_off_beacon,
+  /// Reverse away from the beacon before searching for the target object.
   backup,
+  /// Locate and drive toward the colored object using the camera.
   goto_object,
+  /// Drive out of the arena after retrieving or reaching the object.
   escape_arena,
+  /// Stop all motors and display the a message such as elapsed time on the
+  /// brain screen.
   mission_complete,
 };
 
@@ -344,52 +580,67 @@ int
 main()
 {
   Brain.Timer.clear();
+  printf("Starting rescue mission!\n");
 
-  // NOTE: Change port_number to the port on the VEX Brain the E10 Adapter is
-  // connected to.
-  static constexpr int port_number = 1;
-  e10::adapter board(port_number);
-
-  printf("Starting GOTO Beacon!\n");
-
-  static constexpr float forward_rpm = 30;
-
+  // Start the mission state with goto_beacon
   mission_state state = mission_state::goto_beacon;
 
+  // Make `forward_rpm` higher for higher overall speed and lower for lower
+  // speed.
+  constexpr float forward_rpm = 30;
+  // Change `port_number` to the port on the VEX Brain the E10 Adapter is
+  // connected to.
+  constexpr int port_number = 1;
+  e10::adapter sensor(port_number);
+
+  // Loop the code below forever
   while (true) {
     switch (state) {
       case mission_state::goto_beacon: {
-        // 1. Check bumper
+        // =====================================================================
+        // 1. Check bumper to determine if the beacon has been reached
+        // =====================================================================
         if (front_bumper.pressing()) {
           state = mission_state::turn_off_beacon;
           break;
         }
 
-        auto const infrared = board.get_low_ir();
-        float const direction = infrared.direction;
+        // =====================================================================
+        // 2. Collect data from sensor
+        // =====================================================================
+        auto const infrared = sensor.get_low_ir();
+        float const direction = infrared.direction();
 
-        // 2. Spin in place if nothing detected
-        constexpr uint8_t threshold = 10;
-        if (infrared.intensity < threshold) {
+        // =====================================================================
+        // 3. Check if the beacon has been spotted
+        // =====================================================================
+        // The intensity_threshold is how much of a signal to use to determine
+        // if the infrared beacon has been spotted. We need a threshold because
+        // the environment contains infrared light of various frequencies that
+        // can be picked up by the sensors.
+        constexpr uint8_t intensity_threshold = 10;
+        if (infrared.intensity() < intensity_threshold) {
           right_motor.spin(reverse, forward_rpm, rpm);
           left_motor.spin(forward, forward_rpm, rpm);
           break;
         }
 
-        // 3. Calculate error
-
-        // Half way between 3 and 4
-        constexpr float center_target = 3.5f;
+        // =====================================================================
+        // 4. Calculate error
+        // =====================================================================
+        // IR sensor has 8 photo sensors, numbered 0 to 7. max_direction()
+        // return 7. To get the middle we divide the max direction value by 2.
+        constexpr float center_target = infrared.max_direction() / 2.0f;
         // turn_sensitivity controls how aggressively the robot turns when it
         // detects a strong side diode. Increase amount to turn harder. Reduce
         // to turn less.
         constexpr float turn_sensitivity = 0.5f;
-        // We map the discrete direction to an error relative to the center of 3
-        // & 4. If direction is 3 or 4, error will be -0.5 or +0.5, very turn.
-        // If direction is 1, error will be -2.5, large turn.
+        // We map the discrete direction to an error relative to the center.
         float const error = direction - center_target;
 
-        // 4. Tank steering calculation (differential power)
+        // =====================================================================
+        // 5. Tank steering calculation (differential power)
+        // =====================================================================
         // We calculate a "steering offset" that shifts power between wheels.
         float const steer_offset = (error * turn_sensitivity) * forward_rpm;
 
@@ -398,12 +649,16 @@ main()
         float left_rpm = forward_rpm - steer_offset;
         float right_rpm = forward_rpm + steer_offset;
 
-        // 5. Safety clamping
+        // =====================================================================
+        // 6. Safety clamping
+        // =====================================================================
         // Ensure power stays within [0, forward_rpm] to prevent reverse
         left_rpm = e10::clamp(left_rpm, 0.0f, forward_rpm);
         right_rpm = e10::clamp(right_rpm, 0.0f, forward_rpm);
 
-        // 6. Execute
+        // =====================================================================
+        // 7. Send command to motors
+        // =====================================================================
         right_motor.spin(forward, right_rpm, rpm);
         left_motor.spin(forward, left_rpm, rpm);
         break;
@@ -420,17 +675,24 @@ main()
         break;
       }
       case mission_state::goto_object: {
-        // 1. Check bumper
+        // =====================================================================
+        // 1. Check bumper to determine if the object has been reached
+        // =====================================================================
         if (front_bumper.pressing()) {
           state = mission_state::escape_arena;
         }
 
-        constexpr float camera_width = 640;
-        constexpr float camera_height = 480;
-        auto const detected_object = board.get_detected_object();
+        // =====================================================================
+        // 2. Collect data from sensor
+        // =====================================================================
+        auto const detected_object = sensor.get_detected_object();
 
-        // 2. Spin in place if nothing detected
-        if (detected_object.width == 0) {
+        // =====================================================================
+        // 3. Spin in place if nothing detected.
+        // =====================================================================
+        // Simply checking only width is sufficient determine that no object is
+        // has been found.
+        if (detected_object.width() == 0) {
           // Reducing rotation speed because camera is slower to detect objects.
           right_motor.spin(reverse, forward_rpm / 4, rpm);
           left_motor.spin(forward, forward_rpm / 4, rpm);
@@ -462,28 +724,28 @@ main()
     }
 
     if (print_skip % print_skip_count == 0) {
-      auto const low_ir = board.get_low_ir();
-      auto const high_ir = board.get_high_ir();
-      auto const detected_object = board.get_detected_object();
+      auto const low_ir = sensor.get_low_ir();
+      auto const high_ir = sensor.get_high_ir();
+      auto const detected_object = sensor.get_detected_object();
       auto const total_print_count = print_skip / print_skip_count;
       Brain.Screen.printAt(10, 20, " Print count | %d", total_print_count);
       Brain.Screen.printAt(10,
                            40,
                            " 1kHz Beacon | dir: %u, intensity: %03u",
-                           low_ir.direction,
-                           low_ir.intensity);
+                           low_ir.direction(),
+                           low_ir.intensity());
       Brain.Screen.printAt(10,
                            60,
                            "10kHz Beacon | dir: %u, intensity: %03u",
-                           high_ir.direction,
-                           high_ir.intensity);
+                           high_ir.direction(),
+                           high_ir.intensity());
       Brain.Screen.printAt(10,
                            80,
                            " Camera Data | (x: %03u, y: %03u) (%03u X %03u)  ",
-                           detected_object.x_center,
-                           detected_object.y_center,
-                           detected_object.width,
-                           detected_object.height);
+                           detected_object.x_center(),
+                           detected_object.y_center(),
+                           detected_object.width(),
+                           detected_object.height());
     }
     print_skip++;
 
