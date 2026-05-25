@@ -218,7 +218,7 @@ title: "RS485 Response: 'l' (Low-Frequency IR) length: 3 bytes"
 packet
 0-7: "Photo diode number"
 8-15: "Intensity (0–127)"
-16-23: "Checksum (lower 8 bits of sum)"
+16-23: "Checksum (lowest 8 bits of sum)"
 ```
 
 ### Request: High-Frequency IR Reading (`h`)
@@ -232,7 +232,7 @@ title: "RS485 Response: 'h' (High-Frequency IR) length: 3 bytes"
 packet
 0-7: "Photo diode number"
 8-15: "Intensity (0–127)"
-16-23: "Checksum (lower 8 bits of sum)"
+16-23: "Checksum (lowest 8 bits of sum)"
 ```
 
 ### Request: Object Detection Data (`c`)
@@ -252,5 +252,5 @@ packet
 40-47: "Width Lower Bits"
 48-55: "Height Upper Bits"
 56-63: "Height Lower Bits"
-64-71: "Checksum (lower 8 bits of sum)"
+64-71: "Checksum (lowest 8 bits of sum)"
 ```

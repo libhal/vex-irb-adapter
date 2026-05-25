@@ -73,10 +73,17 @@ class adapter
 public:
   struct ir_measurement
   {
+    /// Strongest infrared photo-diode direction from 0 to 7
     uint8_t direction = 0;
+    // Strength of the strongest infrared photo-diode
     uint8_t intensity = 0;
   };
 
+  /**
+   * @brief Representing the location of a detected object
+   *
+   * The camera width is 640 px and height is 480 px.
+   */
   struct detected_object
   {
     uint16_t x_center = 0;
@@ -163,7 +170,7 @@ private:
       if (high_buffer.valid) {
         ir_measurement tmp_high{};
         tmp_high.direction = high_buffer.data[diode_number];
-        tmp_high.intensity = high_buffer.data[intensity_value];
+        tmp_high.intensity = high_buffer.data[intensity_value] & 0x7F;
         m_cached_high = tmp_high;
       }
       this_thread::sleep_for(10);
@@ -345,22 +352,22 @@ main()
 
   printf("Starting GOTO Beacon!\n");
 
-  static constexpr uint8_t threshold = 5;
-  static constexpr float forward_rpm = 20;
+  static constexpr uint8_t threshold = 10;
+  static constexpr float forward_rpm = 30;
 
   mission_state state = mission_state::goto_beacon;
 
   while (true) {
     switch (state) {
       case mission_state::goto_beacon: {
-        auto const infrared = board.get_low_ir();
-        float const direction = infrared.direction;
-
         // 1. Check bumper
         if (front_bumper.pressing()) {
           state = mission_state::turn_off_beacon;
           break;
         }
+
+        auto const infrared = board.get_low_ir();
+        float const direction = infrared.direction;
 
         // 2. Spin in place if nothing detected
         if (infrared.intensity < threshold) {
@@ -387,17 +394,16 @@ main()
 
         // Left motor gets the base power PLUS the offset
         // Right motor gets the base power MINUS the offset
-        float left_rpm = forward_rpm + steer_offset;
-        float right_rpm = forward_rpm - steer_offset;
+        float left_rpm = forward_rpm - steer_offset;
+        float right_rpm = forward_rpm + steer_offset;
 
         // 5. Safety clamping
-        // Ensure power stays within [0, forward_rpm] to prevent reverse or
-        // over-voltage
+        // Ensure power stays within [0, forward_rpm] to prevent reverse
         left_rpm = e10::clamp(left_rpm, 0.0f, forward_rpm);
         right_rpm = e10::clamp(right_rpm, 0.0f, forward_rpm);
 
         // 6. Execute
-        right_motor.spin(reverse, right_rpm, rpm);
+        right_motor.spin(forward, right_rpm, rpm);
         left_motor.spin(forward, left_rpm, rpm);
         break;
       }
@@ -409,24 +415,58 @@ main()
       case mission_state::backup: {
         // STUDENT NOTE: Replace line below with your own code...
         state = mission_state::goto_object;
+        this_thread::sleep_for(1000);
         break;
       }
       case mission_state::goto_object: {
+        // 1. Check bumper
+        if (front_bumper.pressing()) {
+          state = mission_state::escape_arena;
+        }
+
+        constexpr float camera_width = 640;
+        constexpr float camera_height = 480;
         auto const detected_object = board.get_detected_object();
-        // If width (or height) is 0, then the object has not been detected,
-        // then spin around to scan for the object.
+
+        // 2. Spin in place if nothing detected
         if (detected_object.width == 0) {
-          right_motor.spin(forward, 10, rpm);
-          left_motor.spin(reverse, 10, rpm);
+          // Camera is a bit slower to update so move halve as fast
+          right_motor.spin(reverse, forward_rpm / 2, rpm);
+          left_motor.spin(forward, forward_rpm / 2, rpm);
+          break;
         }
 
         // STUDENT NOTE: Add the rest of the code...
 
-        // Check if the front bumper has been pressed. If so, then we must have
-        // reached the object.
-        if (front_bumper.pressing()) {
-          state = mission_state::escape_arena;
-        }
+        // 3. Calculate error
+
+        // Half way between 3 and 4
+        constexpr float center_target = camera_width / 2;
+        // turn_sensitivity controls how aggressively the robot turns when it
+        // detects a strong side diode
+        constexpr float turn_sensitivity = 0.05f;
+        // We map the discrete direction to an error relative to the center of 3
+        // & 4. If direction is 3 or 4, error will be -0.5 or +0.5, very turn.
+        // If direction is 1, error will be -2.5, large turn.
+        float const error = detected_object.x_center - center_target;
+
+        // 4. Tank steering calculation (differential power)
+        // We calculate a "steering offset" that shifts power between wheels.
+        float const steer_offset = error * (turn_sensitivity * forward_rpm);
+
+        // Left motor gets the base power PLUS the offset
+        // Right motor gets the base power MINUS the offset
+        float left_rpm = forward_rpm - steer_offset;
+        float right_rpm = forward_rpm + steer_offset;
+
+        // 5. Safety clamping
+        // Ensure power stays within [0, forward_rpm] to prevent reverse
+        left_rpm = e10::clamp(left_rpm, 0.0f, forward_rpm);
+        right_rpm = e10::clamp(right_rpm, 0.0f, forward_rpm);
+
+        // 6. Execute
+        right_motor.spin(forward, right_rpm, rpm);
+        left_motor.spin(forward, left_rpm, rpm);
         break;
       }
       case mission_state::escape_arena: {
@@ -440,7 +480,6 @@ main()
         right_motor.stop();
         left_motor.stop();
         float const timer_seconds = Brain.Timer.time(seconds);
-        Brain.Screen.clearScreen();
         Brain.Screen.printAt(
           10, 100, "Mission Complete in %.3f seconds!", timer_seconds);
         this_thread::sleep_for(15000);
