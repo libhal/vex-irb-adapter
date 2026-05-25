@@ -1,109 +1,257 @@
-# SJSU E10 IRB to VEX Brain 5 Adapter
+# 🤖 SJSU E10 Robot Lab — VEX5 Adapter
 
-The code in this repo contains the firmware for the adapter, as well as an
-example and a template to be used on the Vex located in the `/vex-code/`
-folder. The files in the vex-code folder are to be used in the [Vex Web Editor]
-(https://codev5.vex.com/) or in VS Code with the [VEX extension](https://www.vexrobotics.com/vexcode/vscode-extension).
+## 📖 Table of Contents
 
-## Getting Started (Writing Code for Vex)
+- [🤖 SJSU E10 Robot Lab — VEX5 Adapter](#-sjsu-e10-robot-lab--vex5-adapter)
+  - [📖 Table of Contents](#-table-of-contents)
+  - [🔍 What Is This?](#-what-is-this)
+  - [📦 Getting Your Files](#-getting-your-files)
+  - [💻 Writing \& Uploading Code](#-writing--uploading-code)
+    - [Option A — CodeV5 by VEX *(Recommended for beginners)*](#option-a--codev5-by-vex-recommended-for-beginners)
+    - [Option B — Visual Studio Code *(For those who want more control)*](#option-b--visual-studio-code-for-those-who-want-more-control)
+  - [📡 Sensor API Reference](#-sensor-api-reference)
+    - [Setup](#setup)
+    - [IR Beacon — Low Frequency (1 kHz)](#ir-beacon--low-frequency-1-khz)
+    - [IR Beacon — High Frequency (10 kHz)](#ir-beacon--high-frequency-10-khz)
+    - [AI Camera](#ai-camera)
+    - [Utility: Clamp](#utility-clamp)
+  - [🆘 Need Help?](#-need-help)
 
-To get access to the starter files on your computer you can download everything
-by clicking the Green `🟩 Code <>` drop down button on the top of the page, and
-navigate to the `Download Zip` button to download a zip of this project.
+---
 
-### Using CodeV5 by VEX (RECOMMENDED)
+## 🔍 What Is This?
 
-> [!IMPORTANT]
-> To use this tool, you **MUST** use a Chrome based browser:
+This project gives your VEX V5 robot the ability to:
+
+- 📡 **Detect IR beacons** — sense direction and strength of 1 kHz
+  or 10 kHz infrared signal
+- 👁️ **See with AI** — locate and track objects using the
+  HuskyLens AI camera
+
+The **E10 Adapter** board plugs into the E10 IRB sensor board on
+one side and your VEX V5 Brain's smart port on the other. The
+firmware and starter code in this repo do the heavy lifting so you
+can focus on writing your robot's logic.
+
+---
+
+## 📦 Getting Your Files
+
+You don't need a GitHub account to download the starter code.
+
+1. Click the green **`<> Code`** button near the top of this page
+2. Select **`Download ZIP`**
+3. Unzip the folder somewhere easy to find (like your Desktop)
+
+> [!TIP]
+> **What is GitHub?** GitHub is a website where code is stored and shared.
+> Think of it like Google Drive, but designed for software projects.
+> You can always come back here to find the current version of the starter
+> files.
+
+---
+
+## 💻 Writing & Uploading Code
+
+### Option A — CodeV5 by VEX *(Recommended for beginners)*
+
+> [!WARNING]
+> **Browser must support Web Serial!** Browsers that support this are listed
+> below:
 >
-> - Google Chrome
-> - Chromium
-> - Microsoft Edge
-> - Opera GX (supports WebSerial)
+> - Chrome
+> - Edge
+> - Chromium,
+> - Opera GX
+> - FireFox version 151
+>
+> See this page for an extended list of browser support here:
+> https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API#browser_compatibility
 
-Here is a link to the web based development software:
-[CodeV5 By Vex](https://codev5.vex.com/). To open the starter project navigate,
-from the web interface, select "File" then "Open" then navigate to the location
-where you installed this project and open the `vex-code/` folder and select `template.v5cpp`.
+1. Go to **[codev5.vex.com](https://codev5.vex.com/)** and create
+   a new `Text` project and select `C++` as the language.
+2. Go to this link **[`vex-code/starter.cpp`](vex-code/starter.cpp)**
+3. Press the "Copy Raw File" Button to copy the files contents.
 
-The downward facing arrow next to `#pragma region IRB Adapter Code` can be clicked to collapse the helper
-class for a cleaner view.
-![collapse](assets/collapse-arrow.jpg)
+![Copy file context](assets/copy_file_context.png)
 
-### Using Visual Studio Code (VSCode)
+4. Back in CodeV5, and paste the contents of the file and press the **Build**
+   button to test if the code builds.
 
-You can also use [Visual Studio Code](https://code.visualstudio.com/) to write
-software for the VEX5 Brain.
+![Build VEX5 Code Button](assets/vex5_build.png)
 
-- Install the [Vex Robotics](https://marketplace.visualstudio.com/items?itemName=VEXRobotics.vexcode) extension.
-- Open the Vex extension tab in VSCode and select "Import Project"
-- Find the downloaded project and select `template.v5cpp`.
+5. Done!
 
-## Requesting and Receiving Data With Helper Code
+> [!TIP]
+> Click the **▶ arrow** next to `#pragma region IRB Adapter Code`
+> to expand the helper library and its contents. Press it again to collapse it
+> and keep your workspace tidy.
 
-The template provides a helper class and functions to assist in asking for data
-from the adapter. They each return a struct containing the needed data and are
-further explained below.
+### Option B — Visual Studio Code *(For those who want more control)*
 
-#### Low Frequency IR Data
+1. Install [Visual Studio Code](https://code.visualstudio.com/)
+2. Install the [VEX Robotics extension]
+   (https://marketplace.visualstudio.com/items?itemName=VEXRobotics.vexcode)
+3. Open the VEX tab → **New Project** (select language `C++`)
+4. Open `vex-code/starter.cpp` from the downloaded folder, copy
+   all its contents, and paste them into your new project's main
+   file.
 
-```C++
+---
+
+## 📡 Sensor API Reference
+
+The `e10::adapter` class gathers **IR beacon** and **AI camera**
+data from the E10 adapter board. Other sensors on your robot
+(motors, bumpers, etc.) are accessed the same way you always would
+in VEX.
+
+### Setup
+
+Declare your adapter once, near the top of your program. Replace
+`1` with whichever smart port your adapter is plugged into.
+
+```cpp
 const int port_number = 1;
-e10::adapter board(port_number);
+e10::adapter sensor(port_number);
 ```
 
-Assuming the above code exists in your project, then you can do the following:
+A background thread starts automatically and continuously reads
+data from the board — so your main loop never blocks waiting for
+sensor data.
 
-```c++
-auto const measurement = board.get_low_ir();
-auto const direction = measurement.direction(); // photo diode index from 0 to 7
-auto const intensity = measurement.intensity(); // signal strength from 0 to 127
+---
+
+### IR Beacon — Low Frequency (1 kHz)
+
+Returns the direction and strength of the **1 kHz** infrared
+beacon signal.
+
+```cpp
+auto const measurement = sensor.get_low_ir();
 ```
 
-#### High Frequency IR Data
+| Method                        | Returns | Description                                                            |
+| ----------------------------- | ------- | ---------------------------------------------------------------------- |
+| `measurement.direction()`     | `int`   | Strongest photo diode: **0** (left) to **7** (right). Center ≈ **3–4** |
+| `measurement.intensity()`     | `int`   | Signal strength **0–127**. Below **10** is usually noise               |
+| `measurement.min_direction()` | `int`   | Always **0**                                                           |
+| `measurement.max_direction()` | `int`   | Always **7**                                                           |
+| `measurement.min_intensity()` | `int`   | Always **0**                                                           |
+| `measurement.max_intensity()` | `int`   | Always **127**                                                         |
 
-```C++
-const int port_number = 1;
-e10::adapter board(port_number);
+**Example:**
+
+```cpp
+auto const measurement = sensor.get_low_ir();
+
+if (measurement.intensity() > 10) {
+    // Beacon is visible — check which side it's on
+    float center = measurement.max_direction() / 2.0f; // 3.5 = dead center
+    float error  = measurement.direction() - center;   // negative = left, positive = right
+}
 ```
 
-Assuming the above code exists in your project, then you can do the following:
+---
 
-```c++
-auto const measurement = board.get_high_ir();
-auto const direction = measurement.direction(); // photo diode index from 0 to 7
-auto const intensity = measurement.intensity(); // signal strength from 0 to 127
+### IR Beacon — High Frequency (10 kHz)
+
+Identical API to low frequency, but reads the **10 kHz** receiver.
+
+```cpp
+auto const measurement = sensor.get_high_ir();
 ```
 
-### AI Camera Data
+| Method                        | Returns | Description                          |
+| ----------------------------- | ------- | ------------------------------------ |
+| `measurement.direction()`     | `int`   | Strongest photo diode index, **0–7** |
+| `measurement.intensity()`     | `int`   | Signal strength, **0–127**           |
+| `measurement.min_direction()` | `int`   | Always **0**                         |
+| `measurement.max_direction()` | `int`   | Always **7**                         |
+| `measurement.min_intensity()` | `int`   | Always **0**                         |
+| `measurement.max_intensity()` | `int`   | Always **127**                       |
 
-```C++
-const int port_number = 1;
-e10::adapter board(port_number);
+**Example:**
+
+```cpp
+auto const measurement = sensor.get_high_ir();
+int dir = measurement.direction();   // 0–7
+int str = measurement.intensity();   // 0–127
 ```
 
-Assuming the above code exists in your project, then you can do the following:
+---
 
-```c++
-auto const object = board.get_detected_object();
-auto const x = object.x_center(); // horizontal center in pixels (0-639)
-auto const y = object.y_center(); // vertical center in pixels (0-479)
-auto const w = object.width();    // bounding box width in pixels
-auto const h = object.height();   // bounding box height in pixels
+### AI Camera
+
+Returns bounding-box data for the object the HuskyLens camera is currently tracking.
+
+> [!TIP]
+> The camera frame is **640 × 480 pixels**. The origin `(0, 0)`
+> is the **top-left** corner.
+
+```cpp
+auto const object = sensor.get_detected_object();
 ```
 
-## About the Project
+| Method                   | Returns | Description                                            |
+| ------------------------ | ------- | ------------------------------------------------------ |
+| `object.x_center()`      | `int`   | Horizontal center of the detected object, **0–639 px** |
+| `object.y_center()`      | `int`   | Vertical center of the detected object, **0–479 px**   |
+| `object.width()`         | `int`   | Bounding box width in pixels. **0 = nothing detected** |
+| `object.height()`        | `int`   | Bounding box height in pixels                          |
+| `object.camera_width()`  | `float` | Always **640**                                         |
+| `object.camera_height()` | `float` | Always **480**                                         |
 
-[![✅ Firmware Build](https://github.com/libhal/vex-irb-adapter/actions/workflows/build.yml/badge.svg)](https://github.com/libhal/vex-irb-adapter/actions/workflows/build.yml)
+**Example:**
 
-This project is an adapter for the SJSU E10 Infrared Receiver Board to allow
-communication with Vex 5 brain through use of a RS485 transceiver and an RJ11
-port (commonly called a smart port on VEX side). The adaptor has a PH4.0
-connector which is used to communicate with the
-[HuskyLens 2 AI Camera](https://www.dfrobot.com/product-2995.html).
+```cpp
+auto const object = sensor.get_detected_object();
 
-The product design is open source. You can find the following parts:
+if (object.width() == 0) {
+    // Nothing in view — spin and search
+} else {
+    // Something found — figure out where it is
+    float screen_center_x = object.camera_width() / 2.0f;  // 320
+    float error = object.x_center() - screen_center_x;     // negative = left of center
+}
+```
 
-- PCB design (OSHWLAB): https://oshwlab.com/libhal/vex-adapter
-- 3v3 Power Regulator (Pololu): (https://www.pololu.com/product/5592)
-- 3D printed enclosure on (OnShape):(https://cad.onshape.com/documents/ee69ea771b3426ac97776444/w/45ac0aa7c9bd20a1984d74b6/e/4c369e0476760c7468856e8b?renderMode=0&uiState=68d6b1c8a8c68f57f9c83bdb)
+> [!TIP]
+> A larger `width()` means the object is closer to the camera.
+> You can use this to estimate distance!
+
+---
+
+### Utility: Clamp
+
+A helper to keep a number within a safe range. Useful for preventing motor speeds from going out of bounds.
+
+```cpp
+e10::clamp(value, min_val, max_val)
+```
+
+| Parameter   | Type | Description                              |
+| ----------- | ---- | ---------------------------------------- |
+| `value`     | `T`  | The number to constrain                  |
+| `min_val`   | `T`  | Minimum allowed value (inclusive)        |
+| `max_val`   | `T`  | Maximum allowed value (inclusive)        |
+| **Returns** | `T`  | `value`, clamped to `[min_val, max_val]` |
+
+**Example:**
+
+```cpp
+float speed = forward_rpm + steer_offset;
+speed = e10::clamp(speed, 0.0f, forward_rpm); // never goes negative or too fast
+```
+
+---
+
+## 🆘 Need Help?
+
+| Issue                                | What to do                                                            |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| Code won't compile                   | Double-check you opened `template.v5cpp`, not a random file           |
+| Robot doesn't respond to the beacon  | Make sure `port_number` matches the physical smart port               |
+| `intensity()` is always low          | Check that the beacon is powered on and within range                  |
+| Camera always returns `width() == 0` | Re-train the HuskyLens on the target object using its onboard buttons |
+| Something else is broken             | Ask your lab instructor                                               |

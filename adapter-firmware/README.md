@@ -1,5 +1,7 @@
 # E10 Adapter Firmware
 
+[![✅ Firmware Build](https://github.com/libhal/vex-irb-adapter/actions/workflows/build.yml/badge.svg)](https://github.com/libhal/vex-irb-adapter/actions/workflows/build.yml)
+
 > [!NOTE]
 > If an adapter has been provided to you by an instructor of your class, such
 > as the E10 course at San Jose State University, then the device has been
@@ -15,6 +17,21 @@ connected to the bottom of the case.
 
 ![E10 adapter case bottom](assets/case-bottom.jpg)
 ![E10 adapter case off](assets/case-off.jpg)
+
+## 🔧 Hardware Overview
+
+| Component             | Purpose                                      | Link                                                                                                                              |
+| --------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| E10 VEX5 Adapter PCB  | Bridges IRB sensor board ↔ VEX V5 smart port | [OSHWLab Design](https://oshwlab.com/libhal/vex-adapter)                                                                          |
+| HuskyLens 2 AI Camera | Object detection & tracking                  | [DFRobot Product Page](https://www.dfrobot.com/product-2995.html)                                                                 |
+| 3.3V Power Regulator  | Powers the adapter's logic                   | [Pololu #5592](https://www.pololu.com/product/5592)                                                                               |
+| 3D Printed Enclosure  | Protects the PCB                             | [OnShape Model](https://cad.onshape.com/documents/ee69ea771b3426ac97776444/w/45ac0aa7c9bd20a1984d74b6/e/4c369e0476760c7468856e8b) |
+
+The adapter communicates with the VEX V5 Brain over **RS-485** via an RJ11 smart
+port connector. The HuskyLens connects via a **PH2.0 connector** — the different
+connectors are intentional to prevent mix-ups.
+
+---
 
 ## Programming Adapter Via Web Programmer (Recommended)
 

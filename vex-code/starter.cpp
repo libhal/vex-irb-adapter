@@ -99,30 +99,27 @@ public:
 
     /**
      * @brief Minimum valid direction index (leftmost photo diode).
-     * @return uint8_t - always 0
+     * @return int - always 0
      */
-    constexpr uint8_t min_direction() const noexcept { return 0; }
+    constexpr int min_direction() const noexcept { return 0; }
 
     /**
      * @brief Maximum valid direction index (rightmost photo diode).
-     * @return uint8_t - always 7, giving 8 discrete directions (0–7)
+     * @return int - always 7, giving 8 discrete directions (0–7)
      */
-    constexpr uint8_t max_direction() const noexcept { return 7; }
+    constexpr int max_direction() const noexcept { return 7; }
 
     /**
      * @brief Minimum detectable signal intensity.
-     * @return uint8_t - always 0 (no signal)
+     * @return int - always 0 (no signal)
      */
-    constexpr uint8_t min_intensity() const noexcept { return 0; }
+    constexpr int min_intensity() const noexcept { return 0; }
 
     /**
      * @brief Maximum detectable signal intensity.
-     * @return uint8_t - always 127
+     * @return int - always 127
      */
-    constexpr uint8_t max_intensity() const noexcept
-    {
-      return max_intensity_mask;
-    }
+    constexpr int max_intensity() const noexcept { return max_intensity_mask; }
 
     /**
      * @brief Index of the photo diode that received the strongest IR signal.
@@ -131,9 +128,9 @@ public:
      * the leftmost diode and 7 is the rightmost. A value near the center (3–4)
      * means the beacon is approximately straight ahead.
      *
-     * @return uint8_t - direction index in [0, 7]
+     * @return int - direction index in [0, 7]
      */
-    uint8_t direction() const noexcept { return raw[diode_number]; }
+    int direction() const noexcept { return raw[diode_number]; }
 
     /**
      * @brief Strength of the detected IR signal.
@@ -142,9 +139,9 @@ public:
      * below a small threshold (e.g. 10) typically indicate ambient IR noise
      * rather than a real beacon signal.
      *
-     * @return uint8_t - signal intensity in [0, 127]
+     * @return int - signal intensity in [0, 127]
      */
-    uint8_t intensity() const noexcept
+    int intensity() const noexcept
     {
       return raw[intensity_value] & max_intensity_mask;
     }
@@ -195,18 +192,18 @@ public:
 
     /**
      * @brief Horizontal center of the detected object's bounding box.
-     * @return uint16_t - x coordinate in pixels, 0 to 639
+     * @return int - x coordinate in pixels, 0 to 639
      */
-    uint16_t x_center() const noexcept
+    int x_center() const noexcept
     {
       return (raw[x_center_hi] << 8) | raw[x_center_low];
     }
 
     /**
      * @brief Vertical center of the detected object's bounding box.
-     * @return uint16_t - y coordinate in pixels, 0 to 479
+     * @return int - y coordinate in pixels, 0 to 479
      */
-    uint16_t y_center() const noexcept
+    int y_center() const noexcept
     {
       return (raw[y_center_hi] << 8) | raw[y_center_low];
     }
@@ -216,18 +213,18 @@ public:
      *
      * A value of 0 indicates that no object was detected in the current frame.
      *
-     * @return uint16_t - bounding box width in pixels
+     * @return int - bounding box width in pixels
      */
-    constexpr uint16_t width() const noexcept
+    constexpr int width() const noexcept
     {
       return (raw[block_width_hi] << 8) | raw[block_width_low];
     }
 
     /**
      * @brief Height of the detected object's bounding box.
-     * @return uint16_t - bounding box height in pixels
+     * @return int - bounding box height in pixels
      */
-    constexpr uint16_t height() const noexcept
+    constexpr int height() const noexcept
     {
       return (raw[block_height_hi] << 8) | raw[block_height_low];
     }
