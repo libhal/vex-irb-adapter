@@ -1,8 +1,8 @@
-# 🤖 SJSU E10 Robot Lab — VEX5 Adapter
+# SJSU E10 Robot Lab — VEX5 Adapter
 
 ## 📖 Table of Contents
 
-- [🤖 SJSU E10 Robot Lab — VEX5 Adapter](#-sjsu-e10-robot-lab--vex5-adapter)
+- [SJSU E10 Robot Lab — VEX5 Adapter](#-sjsu-e10-robot-lab--vex5-adapter)
   - [📖 Table of Contents](#-table-of-contents)
   - [🔍 What Is This?](#-what-is-this)
   - [📦 Getting Your Files](#-getting-your-files)
