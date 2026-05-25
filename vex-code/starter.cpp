@@ -352,7 +352,6 @@ main()
 
   printf("Starting GOTO Beacon!\n");
 
-  static constexpr uint8_t threshold = 10;
   static constexpr float forward_rpm = 30;
 
   mission_state state = mission_state::goto_beacon;
@@ -370,6 +369,7 @@ main()
         float const direction = infrared.direction;
 
         // 2. Spin in place if nothing detected
+        constexpr uint8_t threshold = 10;
         if (infrared.intensity < threshold) {
           right_motor.spin(reverse, forward_rpm, rpm);
           left_motor.spin(forward, forward_rpm, rpm);
@@ -381,7 +381,8 @@ main()
         // Half way between 3 and 4
         constexpr float center_target = 3.5f;
         // turn_sensitivity controls how aggressively the robot turns when it
-        // detects a strong side diode
+        // detects a strong side diode. Increase amount to turn harder. Reduce
+        // to turn less.
         constexpr float turn_sensitivity = 0.5f;
         // We map the discrete direction to an error relative to the center of 3
         // & 4. If direction is 3 or 4, error will be -0.5 or +0.5, very turn.
@@ -390,10 +391,10 @@ main()
 
         // 4. Tank steering calculation (differential power)
         // We calculate a "steering offset" that shifts power between wheels.
-        float const steer_offset = error * (turn_sensitivity * forward_rpm);
+        float const steer_offset = (error * turn_sensitivity) * forward_rpm;
 
-        // Left motor gets the base power PLUS the offset
-        // Right motor gets the base power MINUS the offset
+        // Left motor gets the base power MINUS the offset
+        // Right motor gets the base power PLUS the offset
         float left_rpm = forward_rpm - steer_offset;
         float right_rpm = forward_rpm + steer_offset;
 
@@ -430,49 +431,20 @@ main()
 
         // 2. Spin in place if nothing detected
         if (detected_object.width == 0) {
-          // Camera is a bit slower to update so move halve as fast
-          right_motor.spin(reverse, forward_rpm / 2, rpm);
-          left_motor.spin(forward, forward_rpm / 2, rpm);
+          // Reducing rotation speed because camera is slower to detect objects.
+          right_motor.spin(reverse, forward_rpm / 4, rpm);
+          left_motor.spin(forward, forward_rpm / 4, rpm);
           break;
         }
 
-        // STUDENT NOTE: Add the rest of the code...
+        // STUDENT NOTE: Fill in the rest here.
 
-        // 3. Calculate error
-
-        // Half way between 3 and 4
-        constexpr float center_target = camera_width / 2;
-        // turn_sensitivity controls how aggressively the robot turns when it
-        // detects a strong side diode
-        constexpr float turn_sensitivity = 0.05f;
-        // We map the discrete direction to an error relative to the center of 3
-        // & 4. If direction is 3 or 4, error will be -0.5 or +0.5, very turn.
-        // If direction is 1, error will be -2.5, large turn.
-        float const error = detected_object.x_center - center_target;
-
-        // 4. Tank steering calculation (differential power)
-        // We calculate a "steering offset" that shifts power between wheels.
-        float const steer_offset = error * (turn_sensitivity * forward_rpm);
-
-        // Left motor gets the base power PLUS the offset
-        // Right motor gets the base power MINUS the offset
-        float left_rpm = forward_rpm - steer_offset;
-        float right_rpm = forward_rpm + steer_offset;
-
-        // 5. Safety clamping
-        // Ensure power stays within [0, forward_rpm] to prevent reverse
-        left_rpm = e10::clamp(left_rpm, 0.0f, forward_rpm);
-        right_rpm = e10::clamp(right_rpm, 0.0f, forward_rpm);
-
-        // 6. Execute
-        right_motor.spin(forward, right_rpm, rpm);
-        left_motor.spin(forward, left_rpm, rpm);
         break;
       }
       case mission_state::escape_arena: {
-        // STUDENT NOTE: Suggestion: replace code below put a button on the
-        // robot so when it leaves the arena, you can press it to stop it and
-        // move the state to "mission_complete"
+        // STUDENT NOTE: Suggestion, put a button on the robot so when it leaves
+        // the arena, you can press it to stop it and move the state to
+        // "mission_complete". The code to detect that button can be put here.
         state = mission_state::mission_complete;
         break;
       }
