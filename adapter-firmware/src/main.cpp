@@ -159,12 +159,6 @@ void application()
         break;
     }
   }
-  if (read_bytes[0] == 'l') {  // low freq request
-
-  } else if (read_bytes[0] == 'h') {  // hi freq request
-
-  } else if (read_bytes[0] == 'c') {  // cam request
-  }
 }
 
 std::array<hal::byte, 3> get_strongest_signal(bool high_frequency,
