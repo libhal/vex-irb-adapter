@@ -132,16 +132,18 @@ void application()
     } else if (read_bytes[0] == 'c') {  // cam request
       std::array<hal::byte, 9> cam_data{ 0x00, 0x00, 0x00, 0x00, 0x00,
                                          0x00, 0x00, 0x00, 0x00 };
-      if (camera_connected) {
-        cam_data = get_camera_data(all_data_buffer, *i2c, *console);
-      } else {
-        try {
+      try {
+        if (camera_connected) {
+          cam_data = get_camera_data(all_data_buffer, *i2c, *console);
+        } else {
+          hal::print<32>(*console, "Reconnecting Camera\n");
           camera_connected =
             camera_init(all_data_buffer, *i2c, *console, *device_clock);
           cam_data = get_camera_data(all_data_buffer, *i2c, *console);
-        } catch (...) {
-          hal::print<32>(*console, "Camera not connected...\n");
         }
+      } catch (...) {
+        camera_connected = false;
+        hal::print<32>(*console, "Camera not connected...\n");
       }
       // send camera data to vex
       hal::write(*rs485_transceiver, cam_data, hal::never_timeout());
