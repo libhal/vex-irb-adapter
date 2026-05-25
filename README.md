@@ -2,18 +2,17 @@
 
 ## 📖 Table of Contents
 
-- [SJSU E10 Robot Lab — VEX5 Adapter](#-sjsu-e10-robot-lab--vex5-adapter)
+- [SJSU E10 Robot Lab — VEX5 Adapter](#sjsu-e10-robot-lab--vex5-adapter)
   - [📖 Table of Contents](#-table-of-contents)
   - [🔍 What Is This?](#-what-is-this)
-  - [📦 Getting Your Files](#-getting-your-files)
   - [💻 Writing \& Uploading Code](#-writing--uploading-code)
     - [Option A — CodeV5 by VEX *(Recommended for beginners)*](#option-a--codev5-by-vex-recommended-for-beginners)
     - [Option B — Visual Studio Code *(For those who want more control)*](#option-b--visual-studio-code-for-those-who-want-more-control)
   - [📡 Sensor API Reference](#-sensor-api-reference)
     - [Setup](#setup)
     - [IR Beacon — Low Frequency (1 kHz)](#ir-beacon--low-frequency-1-khz)
-    - [IR Beacon — High Frequency (10 kHz)](#ir-beacon--high-frequency-10-khz)
     - [AI Camera](#ai-camera)
+    - [IR Beacon — High Frequency (10 kHz)](#ir-beacon--high-frequency-10-khz)
     - [Utility: Clamp](#utility-clamp)
   - [🆘 Need Help?](#-need-help)
 
@@ -33,21 +32,8 @@ one side and your VEX V5 Brain's smart port on the other. The
 firmware and starter code in this repo do the heavy lifting so you
 can focus on writing your robot's logic.
 
----
-
-## 📦 Getting Your Files
-
-You don't need a GitHub account to download the starter code.
-
-1. Click the green **`<> Code`** button near the top of this page
-2. Select **`Download ZIP`**
-3. Unzip the folder somewhere easy to find (like your Desktop)
-
-> [!TIP]
-> **What is GitHub?** GitHub is a website where code is stored and shared.
-> Think of it like Google Drive, but designed for software projects.
-> You can always come back here to find the current version of the starter
-> files.
+> [!NOTE]
+> A github account is not needed for the steps below.
 
 ---
 
@@ -72,15 +58,21 @@ You don't need a GitHub account to download the starter code.
    a new `Text` project and select `C++` as the language.
 2. Go to this link **[`vex-code/starter.cpp`](vex-code/starter.cpp)**
 3. Press the "Copy Raw File" Button to copy the files contents.
+4. Back in CodeV5, and paste the contents of the file and press the **Build**
+   button to test if the code builds.
+5. Done!
 
 ![Copy file context](assets/copy_file_context.png)
 
-4. Back in CodeV5, and paste the contents of the file and press the **Build**
-   button to test if the code builds.
+<div style="text-align:center">
+Figure 1. How to copy starter file to clipboard.
+</div>
 
-![Build VEX5 Code Button](assets/vex5_build.png)
+![Build codev5 Code Button](assets/vex5_build.png)
 
-5. Done!
+<div style="text-align:center">
+Figure 2. Code V5 Code Build Button (on upper right hand side of website)
+</div>
 
 > [!TIP]
 > Click the **▶ arrow** next to `#pragma region IRB Adapter Code`
@@ -154,6 +146,47 @@ if (measurement.intensity() > 10) {
 
 ---
 
+### AI Camera
+
+Returns bounding-box data for the object the HuskyLens camera is currently tracking.
+
+> [!TIP]
+> The camera frame is **640 × 480 pixels**. The origin `(0, 0)`
+> is the **top-left** corner.
+
+```cpp
+auto const object = sensor.get_detected_object();
+```
+
+| Method                   | Returns | Description                                            |
+| ------------------------ | ------- | ------------------------------------------------------ |
+| `object.x_center()`      | `int`   | Horizontal center of the detected object, **0–639 px** |
+| `object.y_center()`      | `int`   | Vertical center of the detected object, **0–479 px**   |
+| `object.width()`         | `int`   | Bounding box width in pixels.                          |
+| `object.height()`        | `int`   | Bounding box height in pixels                          |
+| `object.camera_width()`  | `float` | Always **640**                                         |
+| `object.camera_height()` | `float` | Always **480**                                         |
+
+**Example:**
+
+```cpp
+auto const object = sensor.get_detected_object();
+
+if (object.width() == 0) {
+    // Nothing in view — spin and search
+} else {
+    // Something found — figure out where it is
+    float screen_center_x = object.camera_width() / 2.0f;  // 320
+    float error = object.x_center() - screen_center_x;     // negative = left of center
+}
+```
+
+> [!TIP]
+> A larger `width()` means the object is closer to the camera.
+> You can use this to estimate distance!
+
+---
+
 ### IR Beacon — High Frequency (10 kHz)
 
 Identical API to low frequency, but reads the **10 kHz** receiver.
@@ -178,47 +211,6 @@ auto const measurement = sensor.get_high_ir();
 int dir = measurement.direction();   // 0–7
 int str = measurement.intensity();   // 0–127
 ```
-
----
-
-### AI Camera
-
-Returns bounding-box data for the object the HuskyLens camera is currently tracking.
-
-> [!TIP]
-> The camera frame is **640 × 480 pixels**. The origin `(0, 0)`
-> is the **top-left** corner.
-
-```cpp
-auto const object = sensor.get_detected_object();
-```
-
-| Method                   | Returns | Description                                            |
-| ------------------------ | ------- | ------------------------------------------------------ |
-| `object.x_center()`      | `int`   | Horizontal center of the detected object, **0–639 px** |
-| `object.y_center()`      | `int`   | Vertical center of the detected object, **0–479 px**   |
-| `object.width()`         | `int`   | Bounding box width in pixels. **0 = nothing detected** |
-| `object.height()`        | `int`   | Bounding box height in pixels                          |
-| `object.camera_width()`  | `float` | Always **640**                                         |
-| `object.camera_height()` | `float` | Always **480**                                         |
-
-**Example:**
-
-```cpp
-auto const object = sensor.get_detected_object();
-
-if (object.width() == 0) {
-    // Nothing in view — spin and search
-} else {
-    // Something found — figure out where it is
-    float screen_center_x = object.camera_width() / 2.0f;  // 320
-    float error = object.x_center() - screen_center_x;     // negative = left of center
-}
-```
-
-> [!TIP]
-> A larger `width()` means the object is closer to the camera.
-> You can use this to estimate distance!
 
 ---
 
