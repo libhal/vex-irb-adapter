@@ -572,8 +572,8 @@ main()
   //    1st input parameter is the port number
   //    2nd parameter is the gear ratio of the motor
   //    3rd parameter determines if the motor should move in reverse
-  motor right_motor = motor(PORT20, ratio18_1, false);
-  motor left_motor = motor(PORT10, ratio18_1, true);
+  motor right_motor = motor(PORT10, ratio18_1, true);
+  motor left_motor = motor(PORT20, ratio18_1, false);
 
   // See VEX API docs here for more details:
   // https://api.vex.com/v5/home/cpp/Motors_and_MotorControllers/motor_and_motor_group.html
@@ -592,6 +592,9 @@ main()
 
   // Loop the code below forever
   while (true) {
+    // Prints sensor information from the e10 sensor to the touch screen.
+    print_sensor_data(sensor, state);
+
     switch (state) {
       case mission_state::goto_object: {
         // =====================================================================
@@ -599,6 +602,7 @@ main()
         // =====================================================================
         if (front_bumper.pressing()) {
           state = mission_state::backup;
+          break;
         }
 
         // =====================================================================
@@ -670,7 +674,7 @@ main()
         state = mission_state::goto_beacon;
         right_motor.stop();
         left_motor.stop();
-        wait(1, seconds);
+        wait(2, seconds);
         break;
       }
       case mission_state::goto_beacon: {
@@ -689,6 +693,9 @@ main()
         // Feel free to modify these values to get the robot to spin/move slower
         // or faster. `spin_rpm` is faster than for `goto_object` because the IR
         // sensor can detect strong infrared signals very quickly.
+        //
+        // The [[maybe_unused]] code tells the build system that these variables
+        // may not be used yet and that OKAY.
         [[maybe_unused]] float const spin_rpm = 40.0f;
         [[maybe_unused]] float const forward_rpm = 30.0f;
 
@@ -731,6 +738,7 @@ main()
         right_motor.stop();
         left_motor.stop();
         state = mission_state::escape_arena;
+        wait(2, seconds);
         break;
       }
       case mission_state::escape_arena: {
@@ -739,19 +747,18 @@ main()
       }
     }
 
-    // Print e10 adapter sensor data to the touch screen.
-    // This can be safely removed if desired.
-    print_sensor_data(sensor, state);
-    // Sleep for 1 millisecond before looping again. This gives time for the
-    // motors to actually make progress before we command them again.
+    // Wait for 1 millisecond before looping again. This gives time for the
+    // motors to move and hardware to update before we command them again.
     wait(1, msec);
   }
 }
 
+mission_state previous_state = mission_state::goto_object;
+
 void
 print_sensor_data(e10::adapter& p_sensor, mission_state p_state)
 {
-  if (e10::print_timer.time(msec) > 100) {
+  if (e10::print_timer.time(msec) > 100 or p_state != previous_state) {
     auto const low_ir = p_sensor.measure_1kHz();
     auto const high_ir = p_sensor.measure_10kHz();
     auto const detected_object = p_sensor.get_detected_object();
@@ -793,10 +800,14 @@ print_sensor_data(e10::adapter& p_sensor, mission_state p_state)
         break;
     }
 
-    Brain.Screen.printAt(
-      10, 100, "       State | (%d) %s", static_cast<int>(p_state), state_name);
+    Brain.Screen.printAt(10,
+                         100,
+                         "       State | (%d) %-15s",
+                         static_cast<int>(p_state),
+                         state_name);
 
     e10::print_timer.clear();
     e10::print_counter++;
+    previous_state = p_state;
   }
 }
