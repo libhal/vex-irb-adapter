@@ -572,8 +572,8 @@ main()
   //    1st input parameter is the port number
   //    2nd parameter is the gear ratio of the motor
   //    3rd parameter determines if the motor should move in reverse
-  motor right_motor = motor(PORT10, ratio18_1, true);
-  motor left_motor = motor(PORT20, ratio18_1, false);
+  motor right_motor = motor(PORT10, ratio18_1, false);
+  motor left_motor = motor(PORT20, ratio18_1, true);
 
   // See VEX API docs here for more details:
   // https://api.vex.com/v5/home/cpp/Motors_and_MotorControllers/motor_and_motor_group.html
