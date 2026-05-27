@@ -58,12 +58,15 @@ can focus on writing your robot's logic.
 2. Go to this link
    **[`vex-code/find_my_object.cpp`](vex-code/find_my_object.cpp)**
 3. Press the "Copy Raw File" Button to copy the files contents.
-4. Back in CodeV5, and paste the contents of the file and press the **Build**
-   button to test if the code builds.
-5. Done!
 
 ![Copy file context](assets/copy_file_context.png)
+
+4. Back in CodeV5, and paste the contents of the file and press the **Build**
+   button to test if the code builds.
+
 ![Build codev5 Code Button](assets/vex5_build.png)
+
+5. Done!
 
 > [!TIP]
 > Click the **▶ arrow** next to `#pragma region IRB Adapter Code`
