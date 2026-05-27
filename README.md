@@ -109,8 +109,7 @@ sensor data.
 
 ### IR Beacon
 
-Returns the direction and strength of the **1 kHz** infrared
-beacon signal.
+Returns the direction and strength of the infrared beacon signal.
 
 ```cpp
 auto const measurement = sensor.measure_10kHz();
