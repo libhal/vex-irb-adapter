@@ -10,9 +10,8 @@
     - [Option B — Visual Studio Code *(For those who want more control)*](#option-b--visual-studio-code-for-those-who-want-more-control)
   - [📡 Sensor API Reference](#-sensor-api-reference)
     - [Setup](#setup)
-    - [IR Beacon — Low Frequency (1 kHz)](#ir-beacon--low-frequency-1-khz)
+    - [IR Beacon](#ir-beacon)
     - [AI Camera](#ai-camera)
-    - [IR Beacon — High Frequency (10 kHz)](#ir-beacon--high-frequency-10-khz)
     - [Utility: Clamp](#utility-clamp)
   - [🆘 Need Help?](#-need-help)
 
@@ -56,7 +55,8 @@ can focus on writing your robot's logic.
 
 1. Go to **[codev5.vex.com](https://codev5.vex.com/)** and create
    a new `Text` project and select `C++` as the language.
-2. Go to this link **[`vex-code/starter.cpp`](vex-code/starter.cpp)**
+2. Go to this link
+   **[`vex-code/find_my_object.cpp`](vex-code/find_my_object.cpp)**
 3. Press the "Copy Raw File" Button to copy the files contents.
 4. Back in CodeV5, and paste the contents of the file and press the **Build**
    button to test if the code builds.
@@ -65,7 +65,7 @@ can focus on writing your robot's logic.
 ![Copy file context](assets/copy_file_context.png)
 
 <div style="text-align:center">
-Figure 1. How to copy starter file to clipboard.
+Figure 1. How to copy find_my_object file to clipboard.
 </div>
 
 ![Build codev5 Code Button](assets/vex5_build.png)
@@ -85,7 +85,7 @@ Figure 2. Code V5 Code Build Button (on upper right hand side of website)
 2. Install the [VEX Robotics extension]
    (https://marketplace.visualstudio.com/items?itemName=VEXRobotics.vexcode)
 3. Open the VEX tab → **New Project** (select language `C++`)
-4. Open `vex-code/starter.cpp` from the downloaded folder, copy
+4. Open `vex-code/find_my_object.cpp` from the downloaded folder, copy
    all its contents, and paste them into your new project's main
    file.
 
@@ -114,13 +114,14 @@ sensor data.
 
 ---
 
-### IR Beacon — Low Frequency (1 kHz)
+### IR Beacon
 
 Returns the direction and strength of the **1 kHz** infrared
 beacon signal.
 
 ```cpp
-auto const measurement = sensor.get_low_ir();
+auto const measure_1kHz = sensor.measure_1kHz();
+auto const measure_10kHz = sensor.measure_10kHz();
 ```
 
 | Method                        | Returns | Description                                                            |
@@ -135,7 +136,7 @@ auto const measurement = sensor.get_low_ir();
 **Example:**
 
 ```cpp
-auto const measurement = sensor.get_low_ir();
+auto const measurement = sensor.measure_1kHz();
 
 if (measurement.intensity() > 10) {
     // Beacon is visible — check which side it's on
@@ -184,33 +185,6 @@ if (object.width() == 0) {
 > [!TIP]
 > A larger `width()` means the object is closer to the camera.
 > You can use this to estimate distance!
-
----
-
-### IR Beacon — High Frequency (10 kHz)
-
-Identical API to low frequency, but reads the **10 kHz** receiver.
-
-```cpp
-auto const measurement = sensor.get_high_ir();
-```
-
-| Method                        | Returns | Description                          |
-| ----------------------------- | ------- | ------------------------------------ |
-| `measurement.direction()`     | `int`   | Strongest photo diode index, **0–7** |
-| `measurement.intensity()`     | `int`   | Signal strength, **0–127**           |
-| `measurement.min_direction()` | `int`   | Always **0**                         |
-| `measurement.max_direction()` | `int`   | Always **7**                         |
-| `measurement.min_intensity()` | `int`   | Always **0**                         |
-| `measurement.max_intensity()` | `int`   | Always **127**                       |
-
-**Example:**
-
-```cpp
-auto const measurement = sensor.get_high_ir();
-int dir = measurement.direction();   // 0–7
-int str = measurement.intensity();   // 0–127
-```
 
 ---
 
