@@ -269,7 +269,7 @@ public:
    *
    * @return ir_measurement - most recent low-frequency IR beacon measurement
    */
-  ir_measurement get_low_ir()
+  ir_measurement measure_1kHz()
   {
     ir_measurement result1, result2;
     do {
@@ -288,7 +288,7 @@ public:
    *
    * @return ir_measurement - most recent high-frequency IR beacon measurement
    */
-  ir_measurement get_high_ir()
+  ir_measurement measure_10kHz()
   {
     ir_measurement result1, result2;
     do {
@@ -380,7 +380,7 @@ private:
           // the value.
           m_cached_high.raw = buffer.data;
         }
-        this_thread::sleep_for(10);
+        vex::wait(10, msec);
       }
 
       // =======================================================================
@@ -394,7 +394,7 @@ private:
           // returning the value.
           m_cached_camera.raw = buffer.data;
         }
-        this_thread::sleep_for(10);
+        vex::wait(10, msec);
       }
       // =======================================================================
       // --- Low Buffer Processing ---
@@ -407,7 +407,7 @@ private:
           // the value.
           m_cached_low.raw = buffer.data;
         }
-        this_thread::sleep_for(10);
+        vex::wait(10, msec);
       }
     }
     return 0;
@@ -460,7 +460,7 @@ private:
     // attempts needed to capture all bytes which came out to be between 81
     // and 86.
     for (int attempts = 0; attempts < 100 and iterator != end; attempts++) {
-      this_thread::sleep_for(1);
+      vex::wait(1, msec);
       auto const read_length = std::distance(iterator, end);
       auto const bytes_read = fread(/* address = */ iterator,
                                     /* element_size = */ sizeof(*iterator),
@@ -526,29 +526,17 @@ clamp(T value, T min_val, T max_val)
     return max_val;
   return value;
 }
+
+vex::timer print_timer;
+unsigned print_counter = 0;
+
 } // namespace e10
 
 #pragma endregion E10 IRB Adapter Code
 
 #pragma endregion VEXcode Generated Robot Configuration
 
-// Include the V5 Library
-#include "vex.h"
-
-// Allows for easier use of the VEX Library
-using namespace vex;
-
-// Counters to reduce how fast the screen is updated
-static constexpr size_t print_skip_count = 400;
-int print_skip = 0;
-
-// Devices added with codev5.vex.com GUI are defined above in the
-// VEXcode Generated Robot Configuration region in the
-// "Robot configuration code" section. Devices can also be defined
-// manually as seen below.
-motor right_motor = motor(PORT20, ratio18_1, false);
-motor left_motor = motor(PORT10, ratio18_1, true);
-limit front_bumper = limit(Brain.ThreeWirePort.A);
+// ‼️‼️‼️ WARNING: low level driver code above, DO NOT TOUCH ☠️☠️☠️
 
 /**
  * @brief Ordered phases of the robot's autonomous mission.
@@ -558,20 +546,21 @@ limit front_bumper = limit(Brain.ThreeWirePort.A);
  */
 enum class mission_state
 {
-  /// Navigate toward the IR beacon using the low-frequency IR receiver.
-  goto_beacon,
-  /// Deactivate the beacon once the front bumper confirms contact.
-  turn_off_beacon,
-  /// Reverse away from the beacon before searching for the target object.
-  backup,
-  /// Locate and drive toward the colored object using the camera.
+  /// Locate and drive toward to the object using the camera.
   goto_object,
+  /// Reverse away from the object before searching for the infrared beacon
+  backup,
+  /// Navigate toward the infrared beacon
+  goto_beacon,
+  /// Deactivate the beacon once contact with it is confirmed.
+  turn_off_beacon,
   /// Drive out of the arena after retrieving or reaching the object.
   escape_arena,
-  /// Stop all motors and display the a message such as elapsed time on the
-  /// brain screen.
-  mission_complete,
 };
+
+// Delcare function that can print sensor data to VEX touch screen
+void
+print_sensor_data(e10::adapter& p_sensor, mission_state p_state);
 
 int
 main()
@@ -579,12 +568,23 @@ main()
   Brain.Timer.clear();
   printf("Starting rescue mission!\n");
 
-  // Start the mission state with goto_beacon
-  mission_state state = mission_state::goto_beacon;
+  // Create motor objects to for the right and left motor
+  //    1st input parameter is the port number
+  //    2nd parameter is the gear ratio of the motor
+  //    3rd parameter determines if the motor should move in reverse
+  motor right_motor = motor(PORT20, ratio18_1, false);
+  motor left_motor = motor(PORT10, ratio18_1, true);
 
-  // Make `forward_rpm` higher for higher overall speed and lower for lower
-  // speed.
-  constexpr float forward_rpm = 30;
+  // See VEX API docs here for more details:
+  // https://api.vex.com/v5/home/cpp/Motors_and_MotorControllers/motor_and_motor_group.html
+
+  // Create a limit switch connected to legacy port A, which is on the side of
+  // the brain 5 computer.
+  limit front_bumper = limit(Brain.ThreeWirePort.A);
+
+  // Start the mission state with goto_object
+  mission_state state = mission_state::goto_object;
+
   // Change `port_number` to the port on the VEX Brain the E10 Adapter is
   // connected to.
   constexpr int port_number = 1;
@@ -593,6 +593,86 @@ main()
   // Loop the code below forever
   while (true) {
     switch (state) {
+      case mission_state::goto_object: {
+        // =====================================================================
+        // 1. Check bumper to determine if the object has been reached
+        // =====================================================================
+        if (front_bumper.pressing()) {
+          state = mission_state::backup;
+        }
+
+        // =====================================================================
+        // 2. Define speed parameters
+        // =====================================================================
+        // These define the speed of rotation and the speed of forward approach.
+        // Feel free to modify these values to get the robot to spin/move slower
+        // or faster. `spin_rpm` is slow because the camera is slower to detect
+        // objects than it is to keep track of objects.
+        float const spin_rpm = 10.0f;
+        float const forward_rpm = 40.0f;
+
+        // =====================================================================
+        // 3. Collect data from sensor
+        // =====================================================================
+        auto const detected_object = sensor.get_detected_object();
+
+        // =====================================================================
+        // 4. Spin in place if nothing detected.
+        // =====================================================================
+        // Simply checking only width is sufficient determine that no object is
+        // has been found.
+        if (detected_object.width() == 0) {
+          right_motor.spin(reverse, spin_rpm, rpm);
+          left_motor.spin(forward, spin_rpm, rpm);
+          break;
+        }
+
+        // =====================================================================
+        // 5. Calculate error
+        // =====================================================================
+        // IR sensor has 8 photo sensors, numbered 0 to 7. max_direction()
+        // return 7. To get the middle we divide the max direction value by 2.
+        float const center_target = detected_object.camera_width() / 2.0f;
+        // turn_sensitivity controls how aggressively the robot turns when it
+        // detects a strong side diode. Increase amount to turn harder. Reduce
+        // to turn less.
+        float const turn_sensitivity = 0.005f;
+        // We map the discrete direction to an error relative to the center.
+        float const error = detected_object.x_center() - center_target;
+
+        // =====================================================================
+        // 6. Tank steering calculation (differential power)
+        // =====================================================================
+        // We calculate a "steering offset" that shifts power between wheels.
+        float const steer_offset = (error * turn_sensitivity) * forward_rpm;
+
+        // Left motor gets the base power PLUS the offset
+        // Right motor gets the base power MINUS the offset
+        float left_rpm = forward_rpm + steer_offset;
+        float right_rpm = forward_rpm - steer_offset;
+
+        // =====================================================================
+        // 7. Safety clamping
+        // =====================================================================
+        // Ensure power stays within [0, forward_rpm] to prevent reverse
+        left_rpm = e10::clamp(left_rpm, 0.0f, forward_rpm);
+        right_rpm = e10::clamp(right_rpm, 0.0f, forward_rpm);
+
+        // =====================================================================
+        // 8. Send command to motors
+        // =====================================================================
+        left_motor.spin(forward, left_rpm, rpm);
+        right_motor.spin(forward, right_rpm, rpm);
+        break;
+      }
+      case mission_state::backup: {
+        // ✏️ TO STUDENTS: write implementation of backup here
+        state = mission_state::goto_beacon;
+        right_motor.stop();
+        left_motor.stop();
+        wait(1, seconds);
+        break;
+      }
       case mission_state::goto_beacon: {
         // =====================================================================
         // 1. Check bumper to determine if the beacon has been reached
@@ -603,10 +683,20 @@ main()
         }
 
         // =====================================================================
-        // 2. Collect data from sensor
+        // 2. Define speed parameters
         // =====================================================================
-        auto const infrared = sensor.get_low_ir();
-        float const direction = infrared.direction();
+        // These define the speed of rotation and the speed of forward approach.
+        // Feel free to modify these values to get the robot to spin/move slower
+        // or faster. `spin_rpm` is faster than for `goto_object` because the IR
+        // sensor can detect strong infrared signals very quickly.
+        [[maybe_unused]] float const spin_rpm = 40.0f;
+        [[maybe_unused]] float const forward_rpm = 30.0f;
+
+        // =====================================================================
+        // 3. Collect data from sensor
+        // =====================================================================
+        // Get a measurement of infrared sensor for the 1kHz signal
+        auto const infrared = sensor.measure_1kHz();
 
         // =====================================================================
         // 3. Check if the beacon has been spotted
@@ -615,138 +705,98 @@ main()
         // if the infrared beacon has been spotted. We need a threshold because
         // the environment contains infrared light of various frequencies that
         // can be picked up by the sensors.
+
+        // ✏️ TO STUDENTS: In general, this value should work, but it may be
+        // adjusted up or down to help with navigation to the object. If it's
+        // too low, then environmental noise will be picked up by the sensor and
+        // the robot may navigate to something that's emitting infrared light
+        // but isn't the beacon. If this value is too large, the robot will not
+        // detect the beacon object from further away and will continue to spin.
         constexpr uint8_t intensity_threshold = 10;
         if (infrared.intensity() < intensity_threshold) {
-          right_motor.spin(reverse, forward_rpm, rpm);
-          left_motor.spin(forward, forward_rpm, rpm);
+          right_motor.spin(reverse, spin_rpm, rpm);
+          left_motor.spin(forward, spin_rpm, rpm);
           break;
         }
 
-        // =====================================================================
-        // 4. Calculate error
-        // =====================================================================
-        // IR sensor has 8 photo sensors, numbered 0 to 7. max_direction()
-        // return 7. To get the middle we divide the max direction value by 2.
-        constexpr float center_target = infrared.max_direction() / 2.0f;
-        // turn_sensitivity controls how aggressively the robot turns when it
-        // detects a strong side diode. Increase amount to turn harder. Reduce
-        // to turn less.
-        constexpr float turn_sensitivity = 0.5f;
-        // We map the discrete direction to an error relative to the center.
-        float const error = direction - center_target;
-
-        // =====================================================================
-        // 5. Tank steering calculation (differential power)
-        // =====================================================================
-        // We calculate a "steering offset" that shifts power between wheels.
-        float const steer_offset = (error * turn_sensitivity) * forward_rpm;
-
-        // Left motor gets the base power MINUS the offset
-        // Right motor gets the base power PLUS the offset
-        float left_rpm = forward_rpm - steer_offset;
-        float right_rpm = forward_rpm + steer_offset;
-
-        // =====================================================================
-        // 6. Safety clamping
-        // =====================================================================
-        // Ensure power stays within [0, forward_rpm] to prevent reverse
-        left_rpm = e10::clamp(left_rpm, 0.0f, forward_rpm);
-        right_rpm = e10::clamp(right_rpm, 0.0f, forward_rpm);
-
-        // =====================================================================
-        // 7. Send command to motors
-        // =====================================================================
-        right_motor.spin(forward, right_rpm, rpm);
-        left_motor.spin(forward, left_rpm, rpm);
+        // ✏️ TO STUDENTS: implement the rest of goto_beacon here...
+        // 💡 TIP: the APIs for the infrared API can be found at this URL:
+        //    https://github.com/libhal/vex-irb-adapter#-sensor-api-reference
         break;
       }
       case mission_state::turn_off_beacon: {
-        // STUDENT NOTE: Replace line below with your own code...
-        state = mission_state::backup;
-        break;
-      }
-      case mission_state::backup: {
-        // STUDENT NOTE: Replace line below with your own code...
-        state = mission_state::goto_object;
-        this_thread::sleep_for(1000);
-        break;
-      }
-      case mission_state::goto_object: {
-        // =====================================================================
-        // 1. Check bumper to determine if the object has been reached
-        // =====================================================================
-        if (front_bumper.pressing()) {
-          state = mission_state::escape_arena;
-        }
-
-        // =====================================================================
-        // 2. Collect data from sensor
-        // =====================================================================
-        auto const detected_object = sensor.get_detected_object();
-
-        // =====================================================================
-        // 3. Spin in place if nothing detected.
-        // =====================================================================
-        // Simply checking only width is sufficient determine that no object is
-        // has been found.
-        if (detected_object.width() == 0) {
-          // Reducing rotation speed because camera is slower to detect objects.
-          right_motor.spin(reverse, forward_rpm / 4, rpm);
-          left_motor.spin(forward, forward_rpm / 4, rpm);
-          break;
-        }
-
-        // STUDENT NOTE: Fill in the rest here.
-
+        // ✏️ TO STUDENTS: replace the code in this state with your own
+        // 💡 TIP: you can use intensity to determine if the beacon has been
+        //    turned off.
+        right_motor.stop();
+        left_motor.stop();
+        state = mission_state::escape_arena;
         break;
       }
       case mission_state::escape_arena: {
-        // STUDENT NOTE: Suggestion, put a button on the robot so when it leaves
-        // the arena, you can press it to stop it and move the state to
-        // "mission_complete". The code to detect that button can be put here.
-        state = mission_state::mission_complete;
+        // ✏️ TO STUDENTS: replace the code in this state with your own
         break;
       }
-      case mission_state::mission_complete: {
-        right_motor.stop();
-        left_motor.stop();
-        float const timer_seconds = Brain.Timer.time(seconds);
-        Brain.Screen.printAt(
-          10, 100, "Mission Complete in %.3f seconds!", timer_seconds);
-        this_thread::sleep_for(15000);
-        Brain.programStop();
-      }
-      default:
+    }
+
+    // Print e10 adapter sensor data to the touch screen.
+    // This can be safely removed if desired.
+    print_sensor_data(sensor, state);
+    // Sleep for 1 millisecond before looping again. This gives time for the
+    // motors to actually make progress before we command them again.
+    wait(1, msec);
+  }
+}
+
+void
+print_sensor_data(e10::adapter& p_sensor, mission_state p_state)
+{
+  if (e10::print_timer.time(msec) > 100) {
+    auto const low_ir = p_sensor.measure_1kHz();
+    auto const high_ir = p_sensor.measure_10kHz();
+    auto const detected_object = p_sensor.get_detected_object();
+    Brain.Screen.printAt(10, 20, " Print count | %u", e10::print_counter);
+    Brain.Screen.printAt(10,
+                         40,
+                         " 1kHz Beacon | dir: %u, intensity: %03u",
+                         low_ir.direction(),
+                         low_ir.intensity());
+    Brain.Screen.printAt(10,
+                         60,
+                         "10kHz Beacon | dir: %u, intensity: %03u",
+                         high_ir.direction(),
+                         high_ir.intensity());
+    Brain.Screen.printAt(10,
+                         80,
+                         " Camera Data | (x: %03u, y: %03u) (%03u X %03u)  ",
+                         detected_object.x_center(),
+                         detected_object.y_center(),
+                         detected_object.width(),
+                         detected_object.height());
+
+    char const* state_name = "";
+    switch (p_state) {
+      case mission_state::goto_object:
+        state_name = "goto_object";
+        break;
+      case mission_state::backup:
+        state_name = "backup";
+        break;
+      case mission_state::goto_beacon:
+        state_name = "goto_beacon";
+        break;
+      case mission_state::turn_off_beacon:
+        state_name = "turn_off_beacon";
+        break;
+      case mission_state::escape_arena:
+        state_name = "escape_arena";
         break;
     }
 
-    if (print_skip % print_skip_count == 0) {
-      auto const low_ir = sensor.get_low_ir();
-      auto const high_ir = sensor.get_high_ir();
-      auto const detected_object = sensor.get_detected_object();
-      auto const total_print_count = print_skip / print_skip_count;
-      Brain.Screen.printAt(10, 20, " Print count | %d", total_print_count);
-      Brain.Screen.printAt(10,
-                           40,
-                           " 1kHz Beacon | dir: %u, intensity: %03u",
-                           low_ir.direction(),
-                           low_ir.intensity());
-      Brain.Screen.printAt(10,
-                           60,
-                           "10kHz Beacon | dir: %u, intensity: %03u",
-                           high_ir.direction(),
-                           high_ir.intensity());
-      Brain.Screen.printAt(10,
-                           80,
-                           " Camera Data | (x: %03u, y: %03u) (%03u X %03u)  ",
-                           detected_object.x_center(),
-                           detected_object.y_center(),
-                           detected_object.width(),
-                           detected_object.height());
-    }
-    print_skip++;
+    Brain.Screen.printAt(
+      10, 100, "       State | (%d) %s", static_cast<int>(p_state), state_name);
 
-    // Sleep for 1 millisecond before looping again
-    this_thread::sleep_for(1);
+    e10::print_timer.clear();
+    e10::print_counter++;
   }
 }
