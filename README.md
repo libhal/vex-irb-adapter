@@ -113,8 +113,8 @@ Returns the direction and strength of the **1 kHz** infrared
 beacon signal.
 
 ```cpp
-auto const measurement = sensor.measure_1kHz();
-auto const measurement_10kHz = sensor.measure_10kHz();
+auto const measurement = sensor.measure_10kHz();
+auto const measurement_1kHz = sensor.measure_1kHz(); // not needed for class
 ```
 
 | Method                        | Returns | Description                                                            |

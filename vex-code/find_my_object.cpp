@@ -702,8 +702,8 @@ main()
         // =====================================================================
         // 3. Collect data from sensor
         // =====================================================================
-        // Get a measurement of infrared sensor for the 1kHz signal
-        auto const infrared = sensor.measure_1kHz();
+        // Get a measurement of infrared sensor for the 10kHz signal
+        auto const infrared = sensor.measure_10kHz();
 
         // =====================================================================
         // 3. Check if the beacon has been spotted
