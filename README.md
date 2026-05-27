@@ -129,7 +129,7 @@ auto const measurement_1kHz = sensor.measure_1kHz(); // not needed for class
 **Example:**
 
 ```cpp
-auto const measurement = sensor.measure_1kHz();
+auto const measurement = sensor.measure_10kHz();
 
 if (measurement.intensity() > 10) {
     // Beacon is visible — check which side it's on
