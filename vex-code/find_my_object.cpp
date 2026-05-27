@@ -284,7 +284,7 @@ public:
    * @brief Return the latest measurement from the 10 kHz IR receiver.
    *
    * Reads from a cache that is updated by the background sampling thread.
-   * Uses the same torn-write guard as `get_low_ir()`.
+   * Uses the same torn-write guard as `measure_1kHz()`.
    *
    * @return ir_measurement - most recent high-frequency IR beacon measurement
    */
@@ -303,7 +303,7 @@ public:
    * @brief Return the latest object detection result from the camera.
    *
    * Reads from a cache that is updated by the background sampling thread.
-   * Uses the same torn-write guard as `get_low_ir()`. Check
+   * Uses the same torn-write guard as `measure_1kHz()`. Check
    * `detected_object::width() == 0` to determine whether any object is
    * currently visible.
    *

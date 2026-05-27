@@ -63,31 +63,21 @@ can focus on writing your robot's logic.
 5. Done!
 
 ![Copy file context](assets/copy_file_context.png)
-
-<div style="text-align:center">
-Figure 1. How to copy find_my_object file to clipboard.
-</div>
-
 ![Build codev5 Code Button](assets/vex5_build.png)
-
-<div style="text-align:center">
-Figure 2. Code V5 Code Build Button (on upper right hand side of website)
-</div>
 
 > [!TIP]
 > Click the **▶ arrow** next to `#pragma region IRB Adapter Code`
-> to expand the helper library and its contents. Press it again to collapse it
-> and keep your workspace tidy.
+> to expand the hidden helper code for the project. In general, you never need
+> to touch this code. Thus its simplier to keep it hidden. Press the arrow
+> again to collapse it and keep your workspace tidy.
 
 ### Option B — Visual Studio Code *(For those who want more control)*
 
 1. Install [Visual Studio Code](https://code.visualstudio.com/)
-2. Install the [VEX Robotics extension]
-   (https://marketplace.visualstudio.com/items?itemName=VEXRobotics.vexcode)
+2. Install the
+   [VEX Robotics extension](https://marketplace.visualstudio.com/items?itemName=VEXRobotics.vexcode)
 3. Open the VEX tab → **New Project** (select language `C++`)
-4. Open `vex-code/find_my_object.cpp` from the downloaded folder, copy
-   all its contents, and paste them into your new project's main
-   file.
+4. Copy contents of `vex-code/find_my_object.cpp` into your project.
 
 ---
 
@@ -120,8 +110,8 @@ Returns the direction and strength of the **1 kHz** infrared
 beacon signal.
 
 ```cpp
-auto const measure_1kHz = sensor.measure_1kHz();
-auto const measure_10kHz = sensor.measure_10kHz();
+auto const measurement = sensor.measure_1kHz();
+auto const measurement_10kHz = sensor.measure_10kHz();
 ```
 
 | Method                        | Returns | Description                                                            |
@@ -216,7 +206,7 @@ speed = e10::clamp(speed, 0.0f, forward_rpm); // never goes negative or too fast
 
 | Issue                                | What to do                                                            |
 | ------------------------------------ | --------------------------------------------------------------------- |
-| Code won't compile                   | Double-check you opened `template.v5cpp`, not a random file           |
+| Code won't compile                   | Double-check you opened `find_my_object.cpp`, not a random file       |
 | Robot doesn't respond to the beacon  | Make sure `port_number` matches the physical smart port               |
 | `intensity()` is always low          | Check that the beacon is powered on and within range                  |
 | Camera always returns `width() == 0` | Re-train the HuskyLens on the target object using its onboard buttons |
