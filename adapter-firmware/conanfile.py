@@ -12,15 +12,61 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
 from conan import ConanFile
+from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
+from conan.tools.env import VirtualBuildEnv
 
 required_conan_version = ">=2.2.2"
 
 
 class app(ConanFile):
-    python_requires = "libhal-bootstrap/[>=4.3.0 <5]"
-    python_requires_extend = "libhal-bootstrap.app"
+    settings = "compiler", "build_type", "os", "arch"
+    options = {
+        "platform": ["ANY"],
+    }
+    default_options = {
+        "platform": "unspecified",
+    }
+
+    def set_version(self):
+        # Use latest if not specified via command line
+        if not self.version:
+            self.version = "latest"
 
     def requirements(self):
-        bootstrap = self.python_requires["libhal-bootstrap"]
-        bootstrap.module.add_demo_requirements(self)
+        self.requires("libhal-util/[^5.4.0]")
+        ARCHITECTURE = str(self.settings.arch)
+        if ARCHITECTURE.startswith("cortex-m"):
+            self.output.warning(
+                "libhal-arm-mcu usable platform detected...")
+            self.requires("libhal-arm-mcu/[^1.0.0]")
+        else:
+            self.output.warning("No platform library added...")
+
+    def layout(self):
+        BUILD_PATH = Path("build") / str(self.options.platform)
+        cmake_layout(self, build_folder=BUILD_PATH)
+
+    def build_requirements(self):
+        self.tool_requires("ninja/[^1.0.0]")
+        self.tool_requires("cmake/[^4.0.0]")
+        self.tool_requires("libhal-cmake-util/[^4.3.3]")
+
+    def generate(self):
+        virt = VirtualBuildEnv(self)
+        virt.generate()
+
+        cmake = CMakeDeps(self)
+        cmake.generate()
+
+        tc = CMakeToolchain(self)
+        tc.generator = "Ninja"
+        tc.generate()
+
+    def build(self):
+        cmake = CMake(self)
+        cmake.configure()
+        cmake.configure(variables={"E10_ADAPTER_VERSION": str(self.version)})
+        cmake.build()

@@ -71,10 +71,16 @@ int main()
   application();
 }
 
+#if not defined(E10_ADAPTER_VERSION)
+#define E10_ADAPTER_VERSION "undef"
+#endif
+
+constexpr std::string_view version = E10_ADAPTER_VERSION;
+
 void application()
 {
   using namespace std::chrono_literals;
-  std::array<hal::byte, 256> all_data_buffer;
+  std::array<hal::byte, 256> all_data_buffer{};
   auto console = resources::console();
   auto rs485_transceiver = resources::rs485_transceiver();
   auto device_clock = resources::clock();
@@ -102,55 +108,58 @@ void application()
     transceiver_direction->level(true);  // send mode
 
     // process data
-    if (read_bytes[0] == 'l') {  // low freq request
-      // set frequency to low
-      frequency_select->level(false);
-      auto lf_results = get_strongest_signal(false,
-                                             *counter_reset,
-                                             *accumulator_reset,
-                                             *intensity,
-                                             *device_clock,
-                                             *console);
-
-      hal::write(*rs485_transceiver, lf_results, hal::never_timeout());
-      // delay some time to allow bytes to send
-      hal::delay(*device_clock, 2ms);
-
-    } else if (read_bytes[0] == 'h') {  // hi freq request
-      // set frequency to high
-      frequency_select->level(true);
-      auto hf_results = get_strongest_signal(true,
-                                             *counter_reset,
-                                             *accumulator_reset,
-                                             *intensity,
-                                             *device_clock,
-                                             *console);
-      hal::write(*rs485_transceiver, hf_results, hal::never_timeout());
-      // delay some time to allow bytes to send
-      hal::delay(*device_clock, 2ms);
-
-    } else if (read_bytes[0] == 'c') {  // cam request
-      std::array<hal::byte, 9> cam_data{ 0x00, 0x00, 0x00, 0x00, 0x00,
-                                         0x00, 0x00, 0x00, 0x00 };
-      try {
-        if (camera_connected) {
-          cam_data = get_camera_data(all_data_buffer, *i2c, *console);
-        } else {
-          hal::print<32>(*console, "Reconnecting Camera\n");
-          camera_connected =
-            camera_init(all_data_buffer, *i2c, *console, *device_clock);
-          cam_data = get_camera_data(all_data_buffer, *i2c, *console);
-        }
-      } catch (...) {
-        camera_connected = false;
-        hal::print<32>(*console, "Camera not connected...\n");
+    switch (read_bytes[0]) {
+      case 'v': {  // Version
+        hal::write(*rs485_transceiver, version, hal::never_timeout());
+        break;
       }
-      // send camera data to vex
-      hal::write(*rs485_transceiver, cam_data, hal::never_timeout());
-      // delay some time to allow bytes to send
-      hal::delay(*device_clock, 10ms);
-    } else {
-      hal::print<32>(*console, "unkown read 0x%02X \n", read_bytes[0]);
+      case 'l': {
+        // set frequency to low
+        frequency_select->level(false);
+        auto const lf_results = get_strongest_signal(false,
+                                                     *counter_reset,
+                                                     *accumulator_reset,
+                                                     *intensity,
+                                                     *device_clock,
+                                                     *console);
+
+        hal::write(*rs485_transceiver, lf_results, hal::never_timeout());
+        break;
+      }
+      case 'h': {
+        // set frequency to high
+        frequency_select->level(true);
+        auto const hf_results = get_strongest_signal(true,
+                                                     *counter_reset,
+                                                     *accumulator_reset,
+                                                     *intensity,
+                                                     *device_clock,
+                                                     *console);
+        hal::write(*rs485_transceiver, hf_results, hal::never_timeout());
+        break;
+      }
+      case 'c': {
+        std::array<hal::byte, 9> cam_data{ 0x00, 0x00, 0x00, 0x00, 0x00,
+                                           0x00, 0x00, 0x00, 0x00 };
+        try {
+          if (camera_connected) {
+            cam_data = get_camera_data(all_data_buffer, *i2c, *console);
+          } else {
+            hal::print<32>(*console, "Reconnecting Camera\n");
+            camera_connected =
+              camera_init(all_data_buffer, *i2c, *console, *device_clock);
+            cam_data = get_camera_data(all_data_buffer, *i2c, *console);
+          }
+        } catch (...) {
+          camera_connected = false;
+          hal::print<32>(*console, "Camera not connected...\n");
+        }
+        // send camera data to vex
+        hal::write(*rs485_transceiver, cam_data, hal::never_timeout());
+      }
+      default:
+        hal::print<32>(*console, "Unknown read 0x%02X \n", read_bytes[0]);
+        break;
     }
   }
 }
@@ -256,7 +265,7 @@ void flush_buffer(hal::i2c& p_i2c, hal::serial& p_console)
 
   while (!empty) {
     std::array<hal::byte, 4> data = hal::read<4>(p_i2c, camera_address);
-    // pre emptively set empty to true, if 4 empty bytes in a row are found,
+    // preemptively set empty to true, if 4 empty bytes in a row are found,
     // buffer is likely empty
     empty = true;
     hal::print(p_console, "Buffer Flush: ");
@@ -287,7 +296,7 @@ std::span<hal::byte> read_response_data(std::span<hal::byte> p_all_data_buffer,
   hal::byte algo;
 
   // error bytes to be sent in case of error, last byte is a variable to
-  // describe what error occured
+  // describe what error occurred
   // 0x01 = header1 mismatch
   // 0x02 = header2 mismatch
   std::span<hal::byte> error_bytes = p_all_data_buffer.subspan(0, 3);
