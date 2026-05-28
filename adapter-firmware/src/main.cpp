@@ -183,7 +183,7 @@ void application()
         break;
     }
 
-    // Wait before setting the transceiver into read mode
+    // Wait before setting changing moving transceiver into read mode
     hal::delay(*device_clock, 100us);
   }
 }
