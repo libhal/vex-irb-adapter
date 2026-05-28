@@ -43,6 +43,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC include .)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     libhal::$ENV{LIBHAL_PLATFORM_LIBRARY}
     libhal::util)
+# Set version definition for the application to use for the "version" command
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     E10_ADAPTER_VERSION="${E10_ADAPTER_VERSION}")
 
