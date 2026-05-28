@@ -28,6 +28,8 @@ if("$ENV{LIBHAL_PLATFORM}" STREQUAL "")
         "this project.")
 endif()
 
+message(WARNING "Version is: \"${E10_ADAPTER_VERSION}\"")
+
 find_package(libhal-$ENV{LIBHAL_PLATFORM_LIBRARY} REQUIRED CONFIG)
 find_package(libhal-util REQUIRED CONFIG)
 
@@ -41,6 +43,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC include .)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     libhal::$ENV{LIBHAL_PLATFORM_LIBRARY}
     libhal::util)
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    E10_ADAPTER_VERSION="${E10_ADAPTER_VERSION}")
 
 libhal_post_build(${PROJECT_NAME})
 libhal_disassemble(${PROJECT_NAME})

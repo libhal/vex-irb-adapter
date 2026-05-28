@@ -71,10 +71,16 @@ int main()
   application();
 }
 
+#if not defined(E10_ADAPTER_VERSION)
+#define E10_ADAPTER_VERSION "undef"
+#endif
+
+constexpr std::string_view version = E10_ADAPTER_VERSION;
+
 void application()
 {
   using namespace std::chrono_literals;
-  std::array<hal::byte, 256> all_data_buffer;
+  std::array<hal::byte, 256> all_data_buffer{};
   auto console = resources::console();
   auto rs485_transceiver = resources::rs485_transceiver();
   auto device_clock = resources::clock();
@@ -104,21 +110,18 @@ void application()
     // process data
     switch (read_bytes[0]) {
       case 'v': {  // Version
-        // Version: 1.0.0
-        hal::write(*rs485_transceiver,
-                   std::to_array<u8>({ 1, 1, 0 }),
-                   hal::never_timeout());
+        hal::write(*rs485_transceiver, version, hal::never_timeout());
         break;
       }
       case 'l': {
         // set frequency to low
         frequency_select->level(false);
-        auto lf_results = get_strongest_signal(false,
-                                               *counter_reset,
-                                               *accumulator_reset,
-                                               *intensity,
-                                               *device_clock,
-                                               *console);
+        auto const lf_results = get_strongest_signal(false,
+                                                     *counter_reset,
+                                                     *accumulator_reset,
+                                                     *intensity,
+                                                     *device_clock,
+                                                     *console);
 
         hal::write(*rs485_transceiver, lf_results, hal::never_timeout());
         break;
@@ -126,12 +129,12 @@ void application()
       case 'h': {
         // set frequency to high
         frequency_select->level(true);
-        auto hf_results = get_strongest_signal(true,
-                                               *counter_reset,
-                                               *accumulator_reset,
-                                               *intensity,
-                                               *device_clock,
-                                               *console);
+        auto const hf_results = get_strongest_signal(true,
+                                                     *counter_reset,
+                                                     *accumulator_reset,
+                                                     *intensity,
+                                                     *device_clock,
+                                                     *console);
         hal::write(*rs485_transceiver, hf_results, hal::never_timeout());
         break;
       }
@@ -155,15 +158,9 @@ void application()
         hal::write(*rs485_transceiver, cam_data, hal::never_timeout());
       }
       default:
-        hal::print<32>(*console, "unkown read 0x%02X \n", read_bytes[0]);
+        hal::print<32>(*console, "Unknown read 0x%02X \n", read_bytes[0]);
         break;
     }
-  }
-  if (read_bytes[0] == 'l') {  // low freq request
-
-  } else if (read_bytes[0] == 'h') {  // hi freq request
-
-  } else if (read_bytes[0] == 'c') {  // cam request
   }
 }
 
@@ -268,7 +265,7 @@ void flush_buffer(hal::i2c& p_i2c, hal::serial& p_console)
 
   while (!empty) {
     std::array<hal::byte, 4> data = hal::read<4>(p_i2c, camera_address);
-    // pre emptively set empty to true, if 4 empty bytes in a row are found,
+    // preemptively set empty to true, if 4 empty bytes in a row are found,
     // buffer is likely empty
     empty = true;
     hal::print(p_console, "Buffer Flush: ");
@@ -299,7 +296,7 @@ std::span<hal::byte> read_response_data(std::span<hal::byte> p_all_data_buffer,
   hal::byte algo;
 
   // error bytes to be sent in case of error, last byte is a variable to
-  // describe what error occured
+  // describe what error occurred
   // 0x01 = header1 mismatch
   // 0x02 = header2 mismatch
   std::span<hal::byte> error_bytes = p_all_data_buffer.subspan(0, 3);

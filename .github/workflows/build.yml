@@ -29,7 +29,12 @@ jobs:
         run: conan hal setup
 
       - name: 📦 Build adapter firmware for target "stm32f103c8"
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: conan build adapter-firmware -pr:a hal/tc/gcc -pr:h hal/mcu/stm32f103c8
+
+      - name: 📦 Build adapter firmware for target "stm32f103c8"
+        if: startsWith(github.ref, 'refs/tags/')
+        run: conan build adapter-firmware -pr:a hal/tc/gcc -pr:h hal/mcu/stm32f103c8 --version=${{ github.event.release.tag_name }}
 
       - name: 🚀 Push Binaries to Release
         uses: softprops/action-gh-release@v2
