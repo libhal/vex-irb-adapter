@@ -1,4 +1,4 @@
-// Copyright 2024 Khalil Estell
+// Copyright 2025 Malia Labor
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,19 +16,20 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+
 #include <libhal-exceptions/control.hpp>
 #include <libhal-util/i2c.hpp>
 #include <libhal-util/map.hpp>
 #include <libhal-util/serial.hpp>
 #include <libhal-util/steady_clock.hpp>
 #include <libhal/error.hpp>
-
 #include <libhal/i2c.hpp>
 #include <libhal/output_pin.hpp>
 #include <libhal/pointers.hpp>
 #include <libhal/steady_clock.hpp>
 #include <libhal/timeout.hpp>
 #include <libhal/units.hpp>
+
 #include <resource_list.hpp>
 
 void application();
@@ -55,13 +56,13 @@ constexpr hal::byte camera_address = 0x50;
 constexpr hal::byte header1 = 0x55;
 constexpr hal::byte header2 = 0xAA;
 constexpr hal::byte any_algo = 0x00;
-// constexpr hal::byte obj_tracking_algorithm = 0x03;
+[[maybe_unused]] constexpr hal::byte obj_tracking_algorithm = 0x03;
 
 constexpr hal::byte knock_cmd = 0x00;
 constexpr hal::byte knock_length = 0x0A;
 constexpr hal::byte request_blocks_cmd = 0x01;
-// constexpr hal::byte change_algorithm_cmd = 0x0A;
-// constexpr hal::byte change_algorithm_length = 0x0A;
+[[maybe_unused]] constexpr hal::byte change_algorithm_cmd = 0x0A;
+[[maybe_unused]] constexpr hal::byte change_algorithm_length = 0x0A;
 constexpr hal::byte result_ok = 0x00;
 
 int main()
@@ -93,8 +94,8 @@ void application()
 
   hal::print<32>(*console, "Starting application...\n");
   bool camera_connected = false;
+
   try {
-    i2c = resources::i2c();
     camera_connected =
       camera_init(all_data_buffer, *i2c, *console, *device_clock);
   } catch (...) {
@@ -102,15 +103,34 @@ void application()
   }
 
   while (true) {
-    std::array<hal::byte, 1> read_bytes;
-    transceiver_direction->level(false);  // read mode
-    hal::read(*rs485_transceiver, read_bytes, hal::never_timeout());
-    transceiver_direction->level(true);  // send mode
+    std::array<hal::byte, 1> read_bytes{};
+    // Put RS485 transceiver into read mode
+    transceiver_direction->level(false);
+    auto response = rs485_transceiver->read(read_bytes);
+
+    hal::optional_ptr<hal::serial> response_serial = nullptr;
+
+    if (response.data.size() == read_bytes.size()) {
+      // We received some data, put RS485 transceiver into send mode
+      transceiver_direction->level(true);
+      response_serial = rs485_transceiver;
+    } else {
+      response = console->read(read_bytes);
+      if (response.data.size() == read_bytes.size()) {
+        response_serial = console;
+      }
+    }
+
+    // If a command wasn't received by either serial port, skip the rest of the
+    // loop.
+    if (response_serial == nullptr) {
+      continue;
+    }
 
     // process data
     switch (read_bytes[0]) {
       case 'v': {  // Version
-        hal::write(*rs485_transceiver, version, hal::never_timeout());
+        hal::write(*response_serial, version, hal::never_timeout());
         break;
       }
       case 'l': {
@@ -123,7 +143,7 @@ void application()
                                                      *device_clock,
                                                      *console);
 
-        hal::write(*rs485_transceiver, lf_results, hal::never_timeout());
+        hal::write(*response_serial, lf_results, hal::never_timeout());
         break;
       }
       case 'h': {
@@ -135,7 +155,7 @@ void application()
                                                      *intensity,
                                                      *device_clock,
                                                      *console);
-        hal::write(*rs485_transceiver, hf_results, hal::never_timeout());
+        hal::write(*response_serial, hf_results, hal::never_timeout());
         break;
       }
       case 'c': {
@@ -155,12 +175,16 @@ void application()
           hal::print<32>(*console, "Camera not connected...\n");
         }
         // send camera data to vex
-        hal::write(*rs485_transceiver, cam_data, hal::never_timeout());
+        hal::write(*response_serial, cam_data, hal::never_timeout());
+        break;
       }
       default:
         hal::print<32>(*console, "Unknown read 0x%02X \n", read_bytes[0]);
         break;
     }
+
+    // Wait before setting the transceiver into read mode
+    hal::delay(*device_clock, 100us);
   }
 }
 
@@ -179,6 +203,7 @@ std::array<hal::byte, 3> get_strongest_signal(bool high_frequency,
   // reset and get first photo diode data
   p_acc_reset.level(true);
   p_counter_reset.level(true);
+  hal::delay(p_clock, 100us);
   p_counter_reset.level(false);
   hal::delay(p_clock, 5ms);
   p_acc_reset.level(false);
@@ -246,7 +271,7 @@ bool camera_init(std::span<hal::byte> p_all_data_buffer,
 
   hal::print(p_console, "Knock Response: ");
   for (hal::byte i : ok_buffer) {
-    hal::print<20>(p_console, "0x%02X ", i);
+    hal::print<20>(p_console, "0x%02X ", unsigned{ i });
   }
   hal::print(p_console, "\n");
 
@@ -270,7 +295,7 @@ void flush_buffer(hal::i2c& p_i2c, hal::serial& p_console)
     empty = true;
     hal::print(p_console, "Buffer Flush: ");
     for (size_t i = 0; i < data.size(); i++) {
-      hal::print<20>(p_console, "0x%02X ", data[i]);
+      hal::print<20>(p_console, "0x%02X ", unsigned{ data[i] });
       if (data[i] == 0xFF) {
         // empty byte found
         byte_empty[i] = true;
@@ -377,7 +402,8 @@ std::array<hal::byte, 9> get_camera_data(std::span<hal::byte> p_all_data_buffer,
         // process data
         uint16_t x = (block_data_buffer[4] << 8) | block_data_buffer[3];
         uint16_t y = (block_data_buffer[6] << 8) | block_data_buffer[5];
-        hal::print<20>(p_console, "X: %u   Y: %u\n", x, y);
+        hal::print<20>(
+          p_console, "X: %u   Y: %u\n", unsigned{ x }, unsigned{ y });
         hal::byte send_checksum = 0x00;
         for (size_t i = 3; i < 11; i++) {
           return_bytes[i - 3] = block_data_buffer[i];
@@ -396,7 +422,8 @@ std::array<hal::byte, 9> get_camera_data(std::span<hal::byte> p_all_data_buffer,
       if (read_buffer[0] == 0x1C) {
         uint16_t x = (read_buffer[4] << 8) | read_buffer[3];
         uint16_t y = (read_buffer[6] << 8) | read_buffer[5];
-        hal::print<20>(p_console, "X: %u   Y: %u\n", x, y);
+        hal::print<20>(
+          p_console, "X: %u   Y: %u\n", unsigned{ x }, unsigned{ y });
         hal::byte send_checksum = 0x00;
         for (size_t i = 3; i < 11; i++) {
           return_bytes[i - 3] = read_buffer[i];
