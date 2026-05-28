@@ -67,9 +67,10 @@ hal::v5::strong_ptr<hal::steady_clock> clock();
 hal::v5::strong_ptr<hal::serial> console();
 hal::v5::strong_ptr<hal::serial> rs485_transceiver();
 hal::v5::strong_ptr<hal::adc> intensity();
+hal::v5::strong_ptr<hal::adc> adc_reference();
 hal::v5::strong_ptr<hal::i2c> i2c();
 hal::v5::strong_ptr<hal::output_pin> counter_reset();
-hal::v5::strong_ptr<hal::output_pin> accumulator_reset();
+hal::v5::strong_ptr<hal::output_pin> counter_clock();
 hal::v5::strong_ptr<hal::output_pin> transceiver_direction();
 hal::v5::strong_ptr<hal::output_pin> frequency_select();
 
