@@ -118,6 +118,13 @@ hal::v5::strong_ptr<hal::adc> intensity()
   return hal::acquire_adc(driver_allocator(), adc, hal::stm32f1::adc_pins::pb0);
 }
 
+hal::v5::strong_ptr<hal::adc> adc_reference()
+{
+  static hal::atomic_spin_lock adc_lock;
+  static hal::stm32f1::adc<st_peripheral::adc1> adc(adc_lock);
+  return hal::acquire_adc(driver_allocator(), adc, hal::stm32f1::adc_pins::pb1);
+}
+
 hal::v5::strong_ptr<hal::i2c> i2c()
 {
   static auto sda_output_pin =
