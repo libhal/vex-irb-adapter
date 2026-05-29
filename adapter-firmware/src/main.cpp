@@ -46,8 +46,15 @@ struct sample_args
   hal::steady_clock& clock;
 };
 
+enum class irb_freq : hal::u8
+{
+  low = 0,
+  high = 1,
+};
+
 std::array<hal::byte, 8> sample_all_diodes(sample_args p_args);
 std::array<hal::byte, 3> get_strongest_signal(
+  irb_freq p_freq,
   std::array<hal::byte, 8> const& p_samples);
 
 bool camera_init(std::span<hal::byte> p_all_data_buffer,
@@ -209,7 +216,8 @@ void application()
                               .intensity = *intensity,
                               .reference = *adc_reference,
                               .clock = *device_clock });
-        auto const payload = get_strongest_signal(low_frequency_samples);
+        auto const payload =
+          get_strongest_signal(irb_freq::low, low_frequency_samples);
         hal::write(*rs485_transceiver, payload, hal::never_timeout());
         break;
       }
@@ -222,8 +230,8 @@ void application()
                               .intensity = *intensity,
                               .reference = *adc_reference,
                               .clock = *device_clock });
-        auto payload = get_strongest_signal(high_frequency_samples);
-        payload[1] |= 1 << 7;  // set "HIGH FREQUENCY" 7th bit
+        auto const payload =
+          get_strongest_signal(irb_freq::high, high_frequency_samples);
         hal::write(*rs485_transceiver, payload, hal::never_timeout());
         break;
       }
@@ -306,6 +314,7 @@ std::array<hal::byte, 8> sample_all_diodes(sample_args p_args)
 }
 
 std::array<hal::byte, 3> get_strongest_signal(
+  irb_freq p_freq,
   std::array<hal::u8, 8> const& p_samples)
 {
   std::array<hal::byte, 3> return_bytes{};
@@ -318,6 +327,9 @@ std::array<hal::byte, 3> get_strongest_signal(
   // send 1 bit for freq + 7 bits of data to transceiver for each PD
   return_bytes[1] = static_cast<hal::u8>(*strongest_value >> 1);
 
+  if (p_freq == irb_freq::high) {
+    return_bytes[1] |= 1 << 7;  // set "HIGH FREQUENCY" 7th bit
+  }
   // Calculate checksum
   return_bytes[2] = return_bytes[0] + return_bytes[1];
 
