@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <algorithm>
-#include <array>
+#include <cinttypes>
 #include <cstddef>
 #include <cstdint>
+
+#include <algorithm>
+#include <array>
+#include <numeric>
 
 #include <libhal-exceptions/control.hpp>
 #include <libhal-util/i2c.hpp>
@@ -34,12 +37,18 @@
 
 void application();
 
-std::array<hal::byte, 3> get_strongest_signal(bool high_frequency,
-                                              hal::output_pin& p_counter_reset,
-                                              hal::output_pin& p_acc_reset,
-                                              hal::adc& p_intensity,
-                                              hal::steady_clock& p_clock,
-                                              hal::serial& p_console);
+struct sample_args
+{
+  hal::output_pin& counter_reset;
+  hal::output_pin& counter_clock;
+  hal::adc& intensity;
+  hal::adc& reference;
+  hal::steady_clock& clock;
+};
+
+std::array<hal::byte, 8> sample_all_diodes(sample_args p_args);
+std::array<hal::byte, 3> get_strongest_signal(
+  std::array<hal::byte, 8> const& p_samples);
 
 bool camera_init(std::span<hal::byte> p_all_data_buffer,
                  hal::i2c& p_i2c,
@@ -67,8 +76,7 @@ constexpr hal::byte result_ok = 0x00;
 
 int main()
 {
-  using namespace std::literals;
-  using namespace hal::literals;
+  initialize_platform();
   application();
 }
 
@@ -88,18 +96,19 @@ void application()
   auto transceiver_direction = resources::transceiver_direction();
   auto frequency_select = resources::frequency_select();
   auto counter_reset = resources::counter_reset();
-  auto accumulator_reset = resources::accumulator_reset();
+  auto counter_clock = resources::counter_clock();
   auto intensity = resources::intensity();
+  auto adc_reference = resources::adc_reference();
   auto i2c = resources::i2c();
 
-  hal::print<32>(*console, "Starting application...\n");
+  hal::print<64>(*console, "Starting application...\n");
   bool camera_connected = false;
 
   try {
     camera_connected =
       camera_init(all_data_buffer, *i2c, *console, *device_clock);
   } catch (...) {
-    hal::print<32>(*console, "Camera not connected...\n");
+    hal::print<64>(*console, "Camera not connected...\n");
   }
 
   while (true) {
@@ -108,54 +117,114 @@ void application()
     transceiver_direction->level(false);
     auto response = rs485_transceiver->read(read_bytes);
 
-    hal::optional_ptr<hal::serial> response_serial = nullptr;
+    // Used by commands like 'v' to only respond to the serial port that
+    // requested the version.
+    bool command_found = false;
+    bool console_request = false;
 
     if (response.data.size() == read_bytes.size()) {
       // We received some data, put RS485 transceiver into send mode
       transceiver_direction->level(true);
-      response_serial = rs485_transceiver;
+      command_found = true;
     } else {
       response = console->read(read_bytes);
       if (response.data.size() == read_bytes.size()) {
-        response_serial = console;
+        command_found = true;
+        console_request = true;
       }
     }
 
     // If a command wasn't received by either serial port, skip the rest of the
     // loop.
-    if (response_serial == nullptr) {
+    if (not command_found) {
       continue;
     }
 
+    auto const start = device_clock->uptime();
     // process data
     switch (read_bytes[0]) {
       case 'v': {  // Version
-        hal::write(*response_serial, version, hal::never_timeout());
+        hal::write(*console, version, hal::never_timeout());
+        hal::write(*rs485_transceiver, version, hal::never_timeout());
+        break;
+      }
+      case 'a': {  // Both low and high frequency signals
+        // Sample the voltage divider's voltage (max expected voltage from the
+        // sensor)
+        auto const reference_ratio = adc_reference->read();
+        // set frequency to low
+        frequency_select->level(false);
+        auto const low_frequency_samples =
+          sample_all_diodes({ .counter_reset = *counter_reset,
+                              .counter_clock = *counter_clock,
+                              .intensity = *intensity,
+                              .reference = *adc_reference,
+                              .clock = *device_clock });
+
+        // set frequency to high
+        frequency_select->level(true);
+        auto const high_frequency_samples =
+          sample_all_diodes({ .counter_reset = *counter_reset,
+                              .counter_clock = *counter_clock,
+                              .intensity = *intensity,
+                              .reference = *adc_reference,
+                              .clock = *device_clock });
+
+        if (console_request) {
+          hal::print<64>(*console, "Reference Ratio = %.6f\n", reference_ratio);
+          hal::print(*console, " Low Samples: [");
+          for (auto sample : low_frequency_samples) {
+            hal::print<64>(*console, "%03u, ", sample);
+          }
+          hal::print(*console, "]\n");
+          hal::print(*console, "High Samples: [");
+          for (auto sample : high_frequency_samples) {
+            hal::print<64>(*console, "%03u, ", sample);
+          }
+          hal::print(*console, "]\n");
+        } else {
+          // Calculate checksum
+          std::array<hal::u8, 1> checksum{};
+          checksum[0] = std::accumulate(
+            low_frequency_samples.begin(), low_frequency_samples.end(), 0);
+          checksum[0] = std::accumulate(high_frequency_samples.begin(),
+                                        high_frequency_samples.end(),
+                                        checksum[0]);
+
+          // Send data over
+          hal::write(
+            *rs485_transceiver, low_frequency_samples, hal::never_timeout());
+          hal::write(
+            *rs485_transceiver, high_frequency_samples, hal::never_timeout());
+          hal::write(*rs485_transceiver, checksum, hal::never_timeout());
+        }
         break;
       }
       case 'l': {
         // set frequency to low
         frequency_select->level(false);
-        auto const lf_results = get_strongest_signal(false,
-                                                     *counter_reset,
-                                                     *accumulator_reset,
-                                                     *intensity,
-                                                     *device_clock,
-                                                     *console);
-
-        hal::write(*response_serial, lf_results, hal::never_timeout());
+        auto const low_frequency_samples =
+          sample_all_diodes({ .counter_reset = *counter_reset,
+                              .counter_clock = *counter_clock,
+                              .intensity = *intensity,
+                              .reference = *adc_reference,
+                              .clock = *device_clock });
+        auto const payload = get_strongest_signal(low_frequency_samples);
+        hal::write(*rs485_transceiver, payload, hal::never_timeout());
         break;
       }
       case 'h': {
         // set frequency to high
         frequency_select->level(true);
-        auto const hf_results = get_strongest_signal(true,
-                                                     *counter_reset,
-                                                     *accumulator_reset,
-                                                     *intensity,
-                                                     *device_clock,
-                                                     *console);
-        hal::write(*response_serial, hf_results, hal::never_timeout());
+        auto const high_frequency_samples =
+          sample_all_diodes({ .counter_reset = *counter_reset,
+                              .counter_clock = *counter_clock,
+                              .intensity = *intensity,
+                              .reference = *adc_reference,
+                              .clock = *device_clock });
+        auto payload = get_strongest_signal(high_frequency_samples);
+        payload[1] |= 1 << 7;  // set "HIGH FREQUENCY" 7th bit
+        hal::write(*rs485_transceiver, payload, hal::never_timeout());
         break;
       }
       case 'c': {
@@ -165,82 +234,92 @@ void application()
           if (camera_connected) {
             cam_data = get_camera_data(all_data_buffer, *i2c, *console);
           } else {
-            hal::print<32>(*console, "Reconnecting Camera\n");
+            hal::print<64>(*console, "Reconnecting Camera\n");
             camera_connected =
               camera_init(all_data_buffer, *i2c, *console, *device_clock);
             cam_data = get_camera_data(all_data_buffer, *i2c, *console);
           }
         } catch (...) {
           camera_connected = false;
-          hal::print<32>(*console, "Camera not connected...\n");
+          hal::print<64>(*console, "Camera not connected...\n");
         }
-        // send camera data to vex
-        hal::write(*response_serial, cam_data, hal::never_timeout());
+        hal::write(*rs485_transceiver, cam_data, hal::never_timeout());
         break;
       }
       default:
-        hal::print<32>(*console, "Unknown read 0x%02X \n", read_bytes[0]);
+        hal::print<64>(*console, "Unknown read 0x%02X \n", read_bytes[0]);
         break;
     }
 
-    // Wait before setting changing moving transceiver into read mode
+    auto const end = device_clock->uptime();
+    auto const delta = (end - start);
+    hal::print<128>(
+      *console, "t: %" PRIu64 ", f: %f\n", delta, device_clock->frequency());
+    // Wait before setting the transceiver into read mode
     hal::delay(*device_clock, 100us);
   }
 }
 
-std::array<hal::byte, 3> get_strongest_signal(bool high_frequency,
-                                              hal::output_pin& p_counter_reset,
-                                              hal::output_pin& p_acc_reset,
-                                              hal::adc& p_intensity,
-                                              hal::steady_clock& p_clock,
-                                              hal::serial& p_console)
+std::array<hal::byte, 8> sample_all_diodes(sample_args p_args)
 {
   using namespace std::chrono_literals;
-  std::array<float, 8> read_values;
 
-  // get data from IRB using current strategy
-  size_t led_count = 0;
-  // reset and get first photo diode data
-  p_acc_reset.level(true);
-  p_counter_reset.level(true);
-  hal::delay(p_clock, 100us);
-  p_counter_reset.level(false);
-  hal::delay(p_clock, 5ms);
-  p_acc_reset.level(false);
-  hal::delay(p_clock, 3ms);
-  read_values[led_count] = p_intensity.read();
+  hal::output_pin& counter_reset = p_args.counter_reset;
+  hal::output_pin& counter_clock = p_args.counter_clock;
+  hal::adc& intensity = p_args.intensity;
+  hal::adc& reference = p_args.reference;
+  hal::steady_clock& clock = p_args.clock;
 
-  while (led_count < 7) {
-    // get PD 1 - 7 data
-    hal::delay(p_clock, 2ms);
-    p_acc_reset.level(true);
-    led_count++;
-    hal::delay(p_clock, 5ms);
-    p_acc_reset.level(false);
-    hal::delay(p_clock, 3ms);
-    read_values[led_count] = p_intensity.read();
+  std::array<hal::u8, 8> samples{};
+
+  // Sample the voltage divider's voltage (max expected voltage from the sensor)
+  auto const reference_ratio = reference.read();
+
+  // Reset IRB hardware counter used to multiplex/select the photo diode to
+  // sample
+  counter_reset.level(true);
+  // Wait to allow reset to take hold
+  hal::delay(clock, 10us);
+  // Clear counter reset, photo-diode 0 should be accumulating charge
+  counter_reset.level(false);
+
+  for (auto& value : samples) {
+    counter_clock.level(true);
+    hal::delay(clock, 3ms);
+    // Increment the counter to the next photo-diode
+    counter_clock.level(false);
+    hal::delay(clock, 5ms);
+    // Sample the analog value
+    auto const reading = intensity.read();
+    // Map float to u8 relative to the reference ratio
+    auto const mapped_reading =
+      hal::map(reading, { 0.0f, reference_ratio }, { 0.0f, 255.0f });
+    auto const clamped_value =
+      std::clamp(static_cast<int>(mapped_reading), 0, 255);
+    value = static_cast<hal::u8>(clamped_value);
   }
-  std::array<hal::byte, 3> return_bytes;
-  // find strongest value and save it to return data
-  auto strongest_value =
-    std::max_element(read_values.begin(), read_values.end());
-  auto position = std::distance(read_values.begin(), strongest_value);
+
+  counter_reset.level(true);
+  counter_clock.level(true);
+
+  return samples;
+}
+
+std::array<hal::byte, 3> get_strongest_signal(
+  std::array<hal::u8, 8> const& p_samples)
+{
+  std::array<hal::byte, 3> return_bytes{};
+
+  // Find strongest value of the samples
+  auto const strongest_value = std::ranges::max_element(p_samples);
+  auto const position = std::distance(p_samples.begin(), strongest_value);
   return_bytes[0] = position;
 
-  // scale between 0 and 128 to only get 7 bits of data
-  auto scaled_float = hal::map(*strongest_value, { 0.0, 1.0 }, { 0.0, 127.0 });
-  auto scaled_int = static_cast<uint8_t>(scaled_float);
   // send 1 bit for freq + 7 bits of data to transceiver for each PD
-  auto trimmed_int = (scaled_int & 0b01111111);
-  hal::byte send_byte = (high_frequency << 7) | trimmed_int;
+  return_bytes[1] = static_cast<hal::u8>(*strongest_value >> 1);
 
-  if (high_frequency) {
-    hal::print(p_console, "(HF) ");
-  }
-  return_bytes[1] = send_byte;
-  // add checksum to data
+  // Calculate checksum
   return_bytes[2] = return_bytes[0] + return_bytes[1];
-  hal::print<32>(p_console, "LED %u: %u \n", position, trimmed_int);
 
   return return_bytes;
 }
@@ -271,7 +350,7 @@ bool camera_init(std::span<hal::byte> p_all_data_buffer,
 
   hal::print(p_console, "Knock Response: ");
   for (hal::byte i : ok_buffer) {
-    hal::print<20>(p_console, "0x%02X ", unsigned{ i });
+    hal::print<64>(p_console, "0x%02X ", unsigned{ i });
   }
   hal::print(p_console, "\n");
 
@@ -295,7 +374,7 @@ void flush_buffer(hal::i2c& p_i2c, hal::serial& p_console)
     empty = true;
     hal::print(p_console, "Buffer Flush: ");
     for (size_t i = 0; i < data.size(); i++) {
-      hal::print<20>(p_console, "0x%02X ", unsigned{ data[i] });
+      hal::print<64>(p_console, "0x%02X ", unsigned{ data[i] });
       if (data[i] == 0xFF) {
         // empty byte found
         byte_empty[i] = true;
@@ -317,8 +396,8 @@ std::span<hal::byte> read_response_data(std::span<hal::byte> p_all_data_buffer,
 
   hal::byte header = 0x00;
   uint8_t read_attempts = 0;
-  hal::byte cmd;
-  hal::byte algo;
+  hal::byte cmd = 0;
+  hal::byte algo = 0;
 
   // error bytes to be sent in case of error, last byte is a variable to
   // describe what error occurred
@@ -402,7 +481,7 @@ std::array<hal::byte, 9> get_camera_data(std::span<hal::byte> p_all_data_buffer,
         // process data
         uint16_t x = (block_data_buffer[4] << 8) | block_data_buffer[3];
         uint16_t y = (block_data_buffer[6] << 8) | block_data_buffer[5];
-        hal::print<20>(
+        hal::print<64>(
           p_console, "X: %u   Y: %u\n", unsigned{ x }, unsigned{ y });
         hal::byte send_checksum = 0x00;
         for (size_t i = 3; i < 11; i++) {
@@ -414,7 +493,7 @@ std::array<hal::byte, 9> get_camera_data(std::span<hal::byte> p_all_data_buffer,
         hal::print(p_console, "Unknown Response: ");
         flush_needed = true;
         for (hal::byte i : block_data_buffer) {
-          hal::print<20>(p_console, "0x%02X ", i);
+          hal::print<64>(p_console, "0x%02X ", i);
         }
         hal::print(p_console, "\n");
       }
@@ -422,7 +501,7 @@ std::array<hal::byte, 9> get_camera_data(std::span<hal::byte> p_all_data_buffer,
       if (read_buffer[0] == 0x1C) {
         uint16_t x = (read_buffer[4] << 8) | read_buffer[3];
         uint16_t y = (read_buffer[6] << 8) | read_buffer[5];
-        hal::print<20>(
+        hal::print<64>(
           p_console, "X: %u   Y: %u\n", unsigned{ x }, unsigned{ y });
         hal::byte send_checksum = 0x00;
         for (size_t i = 3; i < 11; i++) {
@@ -434,7 +513,7 @@ std::array<hal::byte, 9> get_camera_data(std::span<hal::byte> p_all_data_buffer,
         hal::print(p_console, "Unknown Response: ");
         flush_needed = true;
         for (hal::byte i : read_buffer) {
-          hal::print<20>(p_console, "0x%02X ", i);
+          hal::print<64>(p_console, "0x%02X ", i);
         }
         hal::print(p_console, "\n");
       }
@@ -443,7 +522,7 @@ std::array<hal::byte, 9> get_camera_data(std::span<hal::byte> p_all_data_buffer,
       flush_buffer(p_i2c, p_console);
     }
   } catch (...) {
-    hal::print(p_console, "Nacked\n");
+    hal::print(p_console, "NACK\n");
     flush_buffer(p_i2c, p_console);
   }
   return return_bytes;

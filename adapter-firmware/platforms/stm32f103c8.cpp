@@ -111,11 +111,23 @@ hal::v5::strong_ptr<hal::serial> rs485_transceiver()
     driver_allocator(), hal::port<2>, hal::buffer<128>);
 }
 
-hal::v5::strong_ptr<hal::adc> intensity()
+auto& adc1()
 {
   static hal::atomic_spin_lock adc_lock;
   static hal::stm32f1::adc<st_peripheral::adc1> adc(adc_lock);
-  return hal::acquire_adc(driver_allocator(), adc, hal::stm32f1::adc_pins::pb0);
+  return adc;
+}
+
+hal::v5::strong_ptr<hal::adc> intensity()
+{
+  return hal::acquire_adc(
+    driver_allocator(), adc1(), hal::stm32f1::adc_pins::pb0);
+}
+
+hal::v5::strong_ptr<hal::adc> adc_reference()
+{
+  return hal::acquire_adc(
+    driver_allocator(), adc1(), hal::stm32f1::adc_pins::pb1);
 }
 
 hal::v5::strong_ptr<hal::i2c> i2c()
@@ -139,7 +151,7 @@ hal::v5::strong_ptr<hal::output_pin> counter_reset()
   return hal::acquire_output_pin(driver_allocator(), gpio_b(), 14);
 }
 
-hal::v5::strong_ptr<hal::output_pin> accumulator_reset()
+hal::v5::strong_ptr<hal::output_pin> counter_clock()
 {
   return hal::acquire_output_pin(driver_allocator(), gpio_b(), 13);
 }
